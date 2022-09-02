@@ -9,13 +9,15 @@ import networkx as nx
 from networkx import wiener_index
 import numpy as np
 import pandas as pd
-from scipy.stats import skew, kurtosis, shapiro
+from scipy.stats import skew, kurtosis, shapiro, pearsonr
+from sklearn.metrics.pairwise import cosine_similarity
 import matplotlib.pyplot as plt
 from trecs.logging import VerboseMode
 from trecs.base import (
     BaseObservable,
     register_observables,
 )
+from trecs.matrix_ops import cos_similarity
 
 
 class Diagnostics:
@@ -920,3 +922,127 @@ class AverageFeatureScoreRange(Measurement):
         )
 
         self.observe(afsr)
+
+
+class DisutilityMetric(Measurement):
+    def __init__(self, name = "disutility", verbose = False):
+        Measurement.__init__(self, name, verbose)
+
+    def measure(self, recommender):
+        items_shown = recommender.items_shown
+        if items_shown.size == 0:
+            self.observe(0)
+            return
+        items_shown_attrs = recommender.actual_item_attributes[:, items_shown]
+        user_profs = recommender.actual_user_profiles
+        sim_vals = np.array([cos_similarity(user_profs[i], items_shown_attrs[:, i]) for i in range(recommender.num_users)])
+        self.observe(sim_vals.mean())
+
+
+class RecMetric(Measurement):
+    def __init__(self, name = "recommendation_histogram", verbose = False, user = None):
+        Measurement.__init__(self, name, verbose)
+        if type(user) is not int and user is not None:
+            raise ValueError("Parameter user can be either a user index (int) or None.")
+        self.user = user
+
+    def measure(self, recommender):
+        if recommender.items_shown.size == 0:
+            self.observe(None)
+            return
+
+        if self.user is not None:
+            histogram = self._generate_items_shown_histogram(
+                recommender.items_shown[self.user], 1, recommender.num_items, recommender.num_items_per_iter
+            )
+        else:
+            histogram = self._generate_items_shown_histogram(
+                recommender.items_shown, recommender.num_users, recommender.num_items, recommender.num_items_per_iter
+            )
+        self.observe(histogram, copy = True)
+
+    @staticmethod
+    def _generate_items_shown_histogram(items_shown, num_users, num_items, num_items_per_iter):
+        """
+        Generates a histogram of the number of item_shown per item at the
+        given timestep.
+        Parameters
+        -----------
+            items_shown : :obj:`numpy.ndarray`
+                Array of user items_shown.
+            num_users : int
+                Number of users in the system
+            num_items : int
+                Number of items in the system
+            num_items_per_iter : int
+                Number of items shown at each timestep
+        Returns
+        ---------
+            :obj:`numpy.ndarray`:
+                Histogram of the number of items_shown aggregated by items at the given timestep.
+        """
+        histogram = np.zeros(num_items)
+        for u in range(num_users):
+            np.add.at(histogram, items_shown[u], 1)
+        # Check that there're num_items_per_iter items_shown per user
+        if histogram.sum() != num_users * num_items_per_iter:
+            raise ValueError("The sum of items shown must be equal to the number of users times the number of recommender items per timestep")
+        return histogram
+
+
+class ScoreMetric(Measurement):
+    def __init__(self, users_profiles, name = "score", verbose = False):
+        Measurement.__init__(self, name, verbose)
+        self.users_profiles = users_profiles
+
+    def measure(self, recommender):
+        interactions = recommender.interactions
+        if interactions.size == 0:
+            self.observe(0)
+            return
+        user_scores = self.users_profiles.actual_user_scores
+        sim_vals = user_scores.get_item_scores(np.expand_dims(interactions, 1))
+        self.observe(sim_vals.mean())
+
+class CorrelationMeasurement(Measurement, Diagnostics):
+    """
+    Measures the correlation coefficient between real and predicted user scores.
+    It can be used to evaluate how accurate the model predictions are.
+    This class inherits from :class:`.Measurement`.
+    Parameters
+    -----------
+        verbose: bool, default False
+            If ``True``, enables verbose mode. Disabled by default.
+    Attributes
+    -----------
+        Inherited by Measurement: :class:`.Measurement`
+        name: str (optional, default: "mse")
+            Name of the measurement component.
+    """
+    def __init__(self, verbose = False, diagnostics = False, **kwargs):
+        self.diagnostics = diagnostics
+        Measurement.__init__(self, "correlation", verbose = verbose)
+        if diagnostics:
+            Diagnostics.__init__(self, **kwargs)
+
+    def measure(self, recommender):
+        """
+        Measures and records the correlation coefficient between the user preferences
+        predicted by the system and the users' actual preferences.
+        Parameters
+        ------------
+            recommender: :class:`~models.recommender.BaseRecommender`
+                Model that inherits from :class:`~models.recommender.BaseRecommender`.
+        """
+        correlations = np.array([pearsonr(recommender.predicted_scores.value[i],
+                                          recommender.users.actual_user_scores.value[i]) for i in range(recommender.num_users)])
+        self.observe(correlations.mean(), copy = False)
+        if self.diagnostics:
+            self.diagnose(
+                pearsonr(recommender.predicted_scores.value.mean(axis = 1),
+                         recommender.users.actual_user_scores.value).mean(axis = 1)[0]
+            )
+
+def get_jaccard_pairs(users):
+    matrix = np.multiply(cosine_similarity(users, users), np.ones((users.shape[0], users.shape[0])) - np.eye(users.shape[0])) - np.eye(users.shape[0])
+    return list(zip(np.arange(users.shape[0]), np.argmax(matrix, axis = 1)))

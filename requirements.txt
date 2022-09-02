@@ -3,4 +3,6 @@ networkx>=2.4
 tqdm>=4.46.0
 lenskit>=0.11.1
 pandas==1.0.5
+scipy>=1.7.3
+sklearn
 matplotlib

@@ -12,4 +12,9 @@ from .measurement import (
     InteractionMeasurement,
     AverageFeatureScoreRange,
     RecallMeasurement,
+    DisutilityMetric,
+    RecMetric,
+    ScoreMetric,
+    CorrelationMeasurement,
+    get_jaccard_pairs
 )
