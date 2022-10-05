@@ -16,5 +16,8 @@ from .measurement import (
     RecMetric,
     ScoreMetric,
     CorrelationMeasurement,
+    RankingMetric,
+    RecommendationRankingMetric,
+    InteractionRankingMetric,
     get_jaccard_pairs
 )

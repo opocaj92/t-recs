@@ -7,3 +7,5 @@ from .social import SocialFiltering
 from .popularity import PopularityRecommender
 from .random import RandomRecommender
 from .priced import PricedBaseRecommender, PricedContentFiltering, PricedImplicitMF, PricedSocialFiltering, PricedPopularityRecommender, PricedRandomRecommender
+from .ideal import IdealRecommender
+from .hybrid import HybridRecommender, MixedHybrid, EnsebleHybrid
