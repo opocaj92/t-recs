@@ -431,8 +431,11 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             # predicted score; instead, we will sample from the sorted list
             # such that higher-preference items get more probability mass
             num_items_unseen = rec.shape[1]  # number of items unseen per user
-            probabilities = np.logspace(0.0, num_items_unseen / 10.0, num=num_items_unseen, base=2)
-            probabilities = probabilities / probabilities.sum()
+            # use softmax rather than logspace to account for ties
+            probabilities = np.exp(s_filtered - np.max(s_filtered, axis = 1, keepdims = True))
+            probabilities = probabilities /  np.sum(probabilities, axis = 1, keepdims = True)
+            # probabilities = np.logspace(0.0, num_items_unseen / 10.0, num=num_items_unseen, base=2)
+            # probabilities = probabilities / probabilities.sum()
             picks = np.random.choice(num_items_unseen, k, replace=False, p=probabilities)
             return rec[:, picks]
         else:
