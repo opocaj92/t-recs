@@ -938,6 +938,7 @@ class DisutilityMetric(Measurement):
         sim_vals = np.array([cos_similarity(user_profs[i], items_shown_attrs[:, i]) for i in range(recommender.num_users)])
         self.observe(sim_vals.mean())
 
+
 class RecommendationMetric(Measurement):
     def __init__(self, name = "recommendation_histogram", verbose = False, user = None):
         Measurement.__init__(self, name, verbose)
@@ -987,6 +988,7 @@ class RecommendationMetric(Measurement):
             raise ValueError("The sum of items shown must be equal to the number of users times the number of recommender items per timestep")
         return histogram
 
+
 class ScoreMetric(Measurement):
     def __init__(self, users_profiles, name = "score", verbose = False):
         Measurement.__init__(self, name, verbose)
@@ -1000,6 +1002,7 @@ class ScoreMetric(Measurement):
         user_scores = self.users_profiles.actual_user_scores
         sim_vals = user_scores.get_item_scores(np.expand_dims(interactions, 1))
         self.observe(sim_vals.mean())
+
 
 class CorrelationMeasurement(Measurement, Diagnostics):
     """
@@ -1034,13 +1037,14 @@ class CorrelationMeasurement(Measurement, Diagnostics):
                 Model that inherits from :class:`~models.recommender.BaseRecommender`.
         """
         correlations = np.array([pearsonr(recommender.predicted_scores.value[i],
-                                          recommender.users.actual_user_scores.value[i]) for i in range(recommender.num_users)])
+                                          recommender.users.actual_user_scores.value[i])[0] for i in range(recommender.num_users)])
         self.observe(correlations.mean(), copy = False)
         if self.diagnostics:
             self.diagnose(
                 pearsonr(recommender.predicted_scores.value.mean(axis = 1),
                          recommender.users.actual_user_scores.value.mean(axis = 1))[0]
             )
+
 
 class RankingMetric(Measurement, Diagnostics):
     def __init__(self, user_profiles, name = "ranking", verbose = False, user = None, diagnostics = False, **kwargs):
@@ -1175,18 +1179,6 @@ class InteractionRankingMetric(Measurement, Diagnostics):
                 1. / np.take_along_axis(self.true_rank, np.expand_dims(recommender.interactions, 1), axis = 1)
             )
 
-
-def get_jaccard_pairs(users):
-    matrix = np.multiply(cosine_similarity(users, users), np.ones((users.shape[0], users.shape[0])) - np.eye(users.shape[0])) - np.eye(users.shape[0])
-    return list(zip(np.arange(users.shape[0]), np.argmax(matrix, axis = 1)))
-        correlations = np.array([pearsonr(recommender.predicted_scores.value[i],
-                                          recommender.users.actual_user_scores.value[i]) for i in range(recommender.num_users)])
-        self.observe(correlations.mean(), copy = False)
-        if self.diagnostics:
-            self.diagnose(
-                pearsonr(recommender.predicted_scores.value.mean(axis = 1),
-                         recommender.users.actual_user_scores.value).mean(axis = 1)[0]
-            )
 
 def get_jaccard_pairs(users):
     matrix = np.multiply(cosine_similarity(users, users), np.ones((users.shape[0], users.shape[0])) - np.eye(users.shape[0])) - np.eye(users.shape[0])
