@@ -2,12 +2,12 @@ import numpy as np
 from scipy.optimize import nnls
 from lenskit.algorithms import als
 
-from trecs.models.recommender import BaseRecommender
-from trecs.models.popularity import PopularityRecommender
-from trecs.models.content import ContentFiltering
-from trecs.models.social import SocialFiltering
-from trecs.models.mf import ImplicitMF
-from trecs.models.random import RandomRecommender
+from .recommender import BaseRecommender
+from .popularity import PopularityRecommender
+from .content import ContentFiltering
+from .social import SocialFiltering
+from .mf import ImplicitMF
+from .random import RandomRecommender
 import trecs.matrix_ops as mo
 from trecs.validate import validate_user_item_inputs
 

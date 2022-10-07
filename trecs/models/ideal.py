@@ -1,4 +1,4 @@
-from trecs.models import RandomRecommender
+from .random import RandomRecommender
 from trecs.components import PredictedScores
 
 class IdealRecommender(RandomRecommender):
