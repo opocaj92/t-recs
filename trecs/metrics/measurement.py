@@ -1019,9 +1019,9 @@ class CorrelationMeasurement(Measurement, Diagnostics):
         name: str (optional, default: "mse")
             Name of the measurement component.
     """
-    def __init__(self, verbose = False, diagnostics = False, **kwargs):
+    def __init__(self, name = "correlation", verbose = False, diagnostics = False, **kwargs):
         self.diagnostics = diagnostics
-        Measurement.__init__(self, "correlation", verbose = verbose)
+        Measurement.__init__(self, name, verbose = verbose)
         if diagnostics:
             Diagnostics.__init__(self, **kwargs)
         import warnings
