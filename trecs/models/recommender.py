@@ -434,7 +434,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             probabilities = probabilities /  np.sum(probabilities, axis = 1, keepdims = True)
             picks = []
             for u in range(self.num_users):
-            	picks.append(np.random.choice(item_indices[u], k, replace=False, p=probabilities[u])
+            	picks.append(np.random.choice(item_indices[u], k, replace=False, p=probabilities[u]))
             return np.array(picks)
         else:
             # returns top k indices, sorted from greatest to smallest
