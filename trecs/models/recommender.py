@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 import warnings
 import numpy as np
 import scipy.sparse as sp
+from scipy.stats import rankdata
 from tqdm import tqdm
 from trecs.metrics import MeasurementModule
 from trecs.base import SystemStateModule
@@ -425,17 +426,31 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         row = np.repeat(self.users.user_vector, item_indices.shape[1])
         row = row.reshape((self.num_users, -1))
         if self.probabilistic_recommendations:
+            permutation = s_filtered.argsort()
+            rec = item_indices[row, permutation]
             # the recommended items will not be exactly determined by
             # predicted score; instead, we will sample from the sorted list
             # such that higher-preference items get more probability mass
-            # use softmax rather than logspace to account for ties
-            # NEEDS TO BE FIXED TO RESPECT ITEMS SORTING AND choice TO BE CALLED PER USER
-            probabilities = np.exp(s_filtered - np.max(s_filtered, axis = 1, keepdims = True))
-            probabilities = probabilities /  np.sum(probabilities, axis = 1, keepdims = True)
+            num_items_unseen = rec.shape[1]  # number of items unseen per user
+            probabilities = np.logspace(0.0, num_items_unseen / 10.0, num=num_items_unseen, base=2)
+            probabilities = probabilities / probabilities.sum()
+            # same probability to items with same predicted score
+            ranking = rankdata(s_filtered, axis=1, method='min') - 1
+            new_probabilities = probabilities[ranking]
+            new_probabilities = new_probabilities / np.sum(new_probabilities, axis=1, keepdims=True)
             picks = []
             for u in range(self.num_users):
-            	picks.append(np.random.choice(item_indices[u], k, replace=False, p=probabilities[u]))
-            return np.array(picks)
+                picks.append(np.random.choice(num_items_unseen, k, replace=False, p=new_probabilities[u]))
+            return np.take_along_axis(rec, np.array(picks), 1)
+            # picks = np.random.choice(num_items_unseen, k, replace=False, p=probabilities)
+            # return rec[:, picks]
+            # use softmax rather than logspace to account for ties
+            # probabilities = np.exp(s_filtered - np.max(s_filtered, axis = 1, keepdims = True))
+            # probabilities = probabilities /  np.sum(probabilities, axis = 1, keepdims = True)
+            # picks = []
+            # for u in range(self.num_users):
+            #    picks.append(np.random.choice(item_indices[u], k, replace=False, p=probabilities[u]))
+            # return np.array(picks)
         else:
             # returns top k indices, sorted from greatest to smallest
             sort_top_k = mo.top_k_indices(s_filtered, k, self.random_state)
