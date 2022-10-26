@@ -214,7 +214,7 @@ class MixedHybrid(HybridRecommender):
         cf_rec = self.collaborative_filtering.generate_recommendations(k, item_indices)
         rec = []
         for u in range(self.num_users):
-            rec.append(list(dict.fromkeys(np.ravel(np.column_stack((cb_rec[u], cf_rec[u]))).tolist()).keys())[:k // 2])
+            rec.append(list(dict.fromkeys(np.ravel(np.column_stack((cb_rec[u], cf_rec[u]))).tolist()).keys())[:k])
         return np.array(rec)
 
 
@@ -256,4 +256,7 @@ class EnsembleHybrid(HybridRecommender):
 
     def train(self):
         super().train()
-        self.predicted_scores.value = self.w_cb * self.content_based.predicted_scores.value + (1. - self.w_cb) * self.collaborative_filtering.predicted_scores.value
+        self.predicted_scores.value = self.w_cb * self.__normalize(self.content_based.predicted_scores.value) + (1. - self.w_cb) * self.__normalize(self.collaborative_filtering.predicted_scores.value)
+
+    def __normalize(self, a):
+        return (a - np.min(a, axis = 1, keepdims = True)) / (np.ptp(a, axis = 1, keepdims = True) + 1e-32)

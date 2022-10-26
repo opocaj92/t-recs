@@ -939,25 +939,17 @@ class DisutilityMetric(Measurement):
         self.observe(sim_vals.mean())
 
 
-class RecommendationMetric(Measurement):
-    def __init__(self, name = "recommendation_histogram", verbose = False, user = None):
+class RecommendationMeasurement(Measurement):
+    def __init__(self, name = "recommendation_histogram", verbose = False):
         Measurement.__init__(self, name, verbose)
-        if type(user) is not int and user is not None:
-            raise ValueError("Parameter user can be either a user index (int) or None.")
-        self.user = user
 
     def measure(self, recommender):
         if recommender.items_shown.size == 0:
             self.observe(None)
             return
-        if self.user is not None:
-            histogram = self.__generate_items_shown_histogram(
-                recommender.items_shown[self.user], 1, recommender.num_items, recommender.num_items_per_iter
-            )
-        else:
-            histogram = self.__generate_items_shown_histogram(
-                recommender.items_shown, recommender.num_users, recommender.num_items, recommender.num_items_per_iter
-            )
+        histogram = self.__generate_items_shown_histogram(
+            recommender.items_shown, recommender.num_users, recommender.num_items, recommender.num_items_per_iter
+        )
         self.observe(histogram, copy = True)
 
     @staticmethod
@@ -987,6 +979,44 @@ class RecommendationMetric(Measurement):
         if histogram.sum() != num_users * num_items_per_iter:
             raise ValueError("The sum of items shown must be equal to the number of users times the number of recommender items per timestep")
         return histogram
+
+
+# Instead of histograms, we simply return the list of interactions
+class InteractionMetric(Measurement):
+    def __init__(self, name = "interaction_history", verbose = False, user = None):
+        Measurement.__init__(self, name, verbose)
+        if type(user) is not int and user is not None:
+            raise ValueError("Parameter user can be either a user index (int) or None.")
+        self.user = user
+
+    def measure(self, recommender):
+        if recommender.interactions.size == 0:
+            self.observe(None)
+            return
+        if self.user is not None:
+            history = np.expand_dims(recommender.interactions[self.user], 0)
+        else:
+            history = recommender.interactions
+        self.observe(history, copy = True)
+
+
+# Also for recommendations
+class RecommendationMetric(Measurement):
+    def __init__(self, name = "recommendation_history", verbose = False, user = None):
+        Measurement.__init__(self, name, verbose)
+        if type(user) is not int and user is not None:
+            raise ValueError("Parameter user can be either a user index (int) or None.")
+        self.user = user
+
+    def measure(self, recommender):
+        if recommender.items_shown.size == 0:
+            self.observe(None)
+            return
+        if self.user is not None:
+            history = np.expand_dims(recommender.items_shown[self.user], 0)
+        else:
+            history = recommender.items_shown
+        self.observe(history, copy = True)
 
 
 class ScoreMetric(Measurement):
@@ -1183,3 +1213,37 @@ class InteractionRankingMetric(Measurement, Diagnostics):
 def get_jaccard_pairs(users):
     matrix = np.multiply(cosine_similarity(users, users), np.ones((users.shape[0], users.shape[0])) - np.eye(users.shape[0])) - np.eye(users.shape[0])
     return list(zip(np.arange(users.shape[0]), np.argmax(matrix, axis = 1)))
+
+
+# FOR DEBUGGING ONLY
+class NNLSCoefficientsxMetric(Measurement):
+    def __init__(self, name = "nnls_coefficients_x", verbose = False):
+        Measurement.__init__(self, name, verbose = verbose)
+
+    def measure(self, recommender):
+        if recommender.all_interactions is None:
+            self.observe(None)
+        users_hat = recommender.users_hat.value
+        self.observe(users_hat)
+
+
+class NNLSCoefficientsAMetric(Measurement):
+    def __init__(self, name = "nnls_coefficients_A", verbose = False):
+        Measurement.__init__(self, name, verbose = verbose)
+
+    def measure(self, recommender):
+        if recommender.all_interactions is None:
+            self.observe(None)
+        items_attr = recommender.predicted_item_attributes.T
+        self.observe(items_attr)
+
+
+class NNLSCoefficientsbMetric(Measurement):
+    def __init__(self, name = "nnls_coefficients_b", verbose = False):
+        Measurement.__init__(self, name, verbose = verbose)
+
+    def measure(self, recommender):
+        if recommender.all_interactions is None:
+            self.observe(None)
+        all_interactions = recommender.all_interactions.toarray()
+        self.observe(all_interactions)

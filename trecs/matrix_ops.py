@@ -459,227 +459,6 @@ def inner_product(user_profiles, item_attributes, normalize_users=True, normaliz
     return scores
 
 
-def sparse_cos_sim(mat1, mat2):
-    """
-    Returns the cosine similarity of two sparse matrices.
-    Parameters
-    -----------
-        mat1: :obj:`scipy.sparse.spmatrix`
-            First factor of the cosine similarity.
-        mat1: :obj:`scipy.sparse.spmatrix`
-            Second factor of the cosine similarity.
-    Returns
-    --------
-        dot_product: :obj:`scipy.sparse.spmatrix`
-    """
-    if not all_sparse(mat1, mat2):
-        raise TypeError("sparse_cos_similarity can only operate on sparse matrices")
-    return cosine_similarity(mat1, mat2, dense_output = False)
-
-
-def cos_similarity(user_profiles, item_attributes, normalize_users = True, normalize_items = False):
-    """
-    Compute the cosine similarity between user profiles and
-    item attributes to return the scores (utility) each item possesses
-    for each user. We call these matrices `user_profiles` and
-    `item_attributes` but note that you could perform an arbitrary matrix
-    cosine similarity with this method.
-    Parameters
-    -----------
-        user_profiles: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
-            First factor of the cosine similarity, which should provide a
-            representation of users.
-        item_attributes: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
-            Second factor of the cosine similarity, which should provide a
-            representation of items.
-    Returns
-    --------
-        scores: :obj:`numpy.ndarray`
-    """
-    if normalize_users:
-        # this is purely an optimization that prevents numpy from having
-        # to multiply huge numbers
-        user_profiles = normalize_matrix(user_profiles, axis = 1)
-    if normalize_items:
-        item_attributes = normalize_matrix(item_attributes.T, axis = 1).T
-    if user_profiles.shape[1] != item_attributes.shape[0]:
-        error_message = (
-            "Number of attributes in user profile matrix must match number "
-            "of attributes in item profile matrix"
-        )
-        raise ValueError(error_message)
-    scores = generic_matrix_op(cosine_similarity, sparse_cos_sim, user_profiles, item_attributes.T)
-    return scores
-
-
-def sparse_eu_distance(mat1, mat2):
-    """
-    Returns the euclidean distance of two sparse matrices.
-    Parameters
-    -----------
-        mat1: :obj:`scipy.sparse.spmatrix`
-            First factor of the euclidean distance.
-        mat1: :obj:`scipy.sparse.spmatrix`
-            Second factor of the euclidean distance.
-    Returns
-    --------
-        dot_product: :obj:`scipy.sparse.spmatrix`
-    """
-    if not all_sparse(mat1, mat2):
-        raise TypeError("sparse_eu_distance can only operate on sparse matrices")
-    return sp.csr_matrix(euclidean_distances(mat1, mat2))
-
-
-def euclidean_distance(user_profiles, item_attributes, normalize_users = True, normalize_items = False):
-    """
-    Compute the euclidean distance between user profiles and
-    item attributes to return the scores (utility) each item possesses
-    for each user. We call these matrices `user_profiles` and
-    `item_attributes` but note that you could perform an arbitrary matrix
-    euclidean distance with this method.
-    Parameters
-    -----------
-        user_profiles: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
-            First factor of the euclidean distance, which should provide a
-            representation of users.
-        item_attributes: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
-            Second factor of the euclidean distance, which should provide a
-            representation of items.
-    Returns
-    --------
-        scores: :obj:`numpy.ndarray`
-    """
-    if normalize_users:
-        # this is purely an optimization that prevents numpy from having
-        # to multiply huge numbers
-        user_profiles = normalize_matrix(user_profiles, axis = 1)
-    if normalize_items:
-        item_attributes = normalize_matrix(item_attributes.T, axis = 1).T
-    if user_profiles.shape[1] != item_attributes.shape[0]:
-        error_message = (
-            "Number of attributes in user profile matrix must match number "
-            "of attributes in item profile matrix"
-        )
-        raise ValueError(error_message)
-    scores = generic_matrix_op(euclidean_distances, sparse_eu_distance, user_profiles, item_attributes.T)
-    #return 1. / scores
-    return -scores
-
-
-def dense_pearson_corr(mat1, mat2):
-    """
-    Returns the pearson correlation of two dense matrices.
-    Parameters
-    -----------
-        mat1: :obj:`scipy.sparse.spmatrix`
-            First factor of the pearson correlation.
-        mat1: :obj:`scipy.sparse.spmatrix`
-            Second factor of the pearson correlation.
-    Returns
-    --------
-        dot_product: :obj:`scipy.sparse.spmatrix`
-    """
-
-    if not all_dense(mat1, mat2):
-        raise TypeError("dense pearson_corr can only operate on dense matrices")
-    scores = np.zeros((mat1.shape[0], mat2.shape[1]))
-    for i in range(mat1.shape[0]):
-        for j in range(mat2.shape[1]):
-            scores[i,j] = pearsonr(mat1[i], mat2[:,j])[0]
-    return scores
-
-
-def sparse_pearson_corr(mat1, mat2):
-    """
-    Returns the pearson correlation of two sparse matrices.
-    Parameters
-    -----------
-        mat1: :obj:`scipy.sparse.spmatrix`
-            First factor of the pearson correlation.
-        mat1: :obj:`scipy.sparse.spmatrix`
-            Second factor of the pearson correlation.
-    Returns
-    --------
-        dot_product: :obj:`scipy.sparse.spmatrix`
-    """
-
-    scores = dense_pearson_corr(mat1.toarray(), mat2.toarray())
-    return sp.csr_matrix(scores)
-
-
-def pearson_correlation(user_profiles, item_attributes, normalize_users = True, normalize_items = False):
-    """
-    Compute the pearson correlation between user profiles and
-    item attributes to return the scores (utility) each item possesses
-    for each user. We call these matrices `user_profiles` and
-    `item_attributes` but note that you could perform an arbitrary matrix
-    pearson correlation with this method.
-    Parameters
-    -----------
-        user_profiles: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
-            First factor of the pearson correlation, which should provide a
-            representation of users.
-        item_attributes: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
-            Second factor of the pearson correlation, which should provide a
-            representation of items.
-    Returns
-    --------
-        scores: :obj:`numpy.ndarray`
-    """
-    if normalize_users:
-        # this is purely an optimization that prevents numpy from having
-        # to multiply huge numbers
-        user_profiles = normalize_matrix(user_profiles, axis = 1)
-    if normalize_items:
-        item_attributes = normalize_matrix(item_attributes.T, axis = 1).T
-    if user_profiles.shape[1] != item_attributes.shape[0]:
-        error_message = (
-            "Number of attributes in user profile matrix must match number "
-            "of attributes in item profile matrix"
-        )
-        raise ValueError(error_message)
-    scores = generic_matrix_op(dense_pearson_corr, sparse_pearson_corr, user_profiles, item_attributes)
-    return scores
-
-
-def scores_with_cost(user_profiles, item_attributes, item_costs, score_fn = inner_product, normalize_users = True, normalize_items = False):
-    scores = score_fn(user_profiles, item_attributes, normalize_users, normalize_items)
-    scores = scores / np.max(scores)
-    if item_costs.shape[0] != item_attributes.shape[1]:
-        error_message = (
-            "Number of item costs must must match number "
-            "of item in item profile matrix"
-        )
-        raise ValueError(error_message)
-    return scores - item_costs
-
-
-def hotelling_scores(user_scores, user_profiles, item_attributes, item_costs, vertical_quality = None, normalize_users = True, normalize_items = False):
-    neg_distance = euclidean_distance(user_profiles, item_attributes, normalize_users, normalize_items)
-    neg_distance = neg_distance / np.max(neg_distance)
-    if user_scores.shape[0] != user_profiles.shape[0] or user_scores.shape[1] != item_attributes.shape[1]:
-        error_message = (
-            "Number of user scores must must match number "
-            "of users in user profile matrix times number"
-            "of item in item profile matrix"
-        )
-        raise ValueError(error_message)
-    if item_costs.shape[0] != item_attributes.shape[1]:
-        error_message = (
-            "Number of item costs must must match number "
-            "of item in item profile matrix"
-        )
-        raise ValueError(error_message)
-    if vertical_quality is not None:
-        if vertical_quality.shape[0] != item_attributes.shape[1]:
-            error_message = (
-                "Number of vertical quality values must must match number "
-                "of item in item profile matrix"
-            )
-            raise ValueError(error_message)
-    return user_scores + vertical_quality + neg_distance - item_costs
-
-
 def scale_rows_dense_fn(vector):
     """
     Returns a function that scales the rows of an
@@ -797,3 +576,224 @@ def slerp(mat1, mat2, perc=0.05):
         + np.sin(perc * omega) / sin_o * mat2_norm.T
     ).T
     return unit_rot * mat1_length
+
+
+def sparse_cos_sim(mat1, mat2):
+    """
+    Returns the cosine similarity of two sparse matrices.
+    Parameters
+    -----------
+        mat1: :obj:`scipy.sparse.spmatrix`
+            First factor of the cosine similarity.
+        mat1: :obj:`scipy.sparse.spmatrix`
+            Second factor of the cosine similarity.
+    Returns
+    --------
+        dot_product: :obj:`scipy.sparse.spmatrix`
+    """
+    if not mo.all_sparse(mat1, mat2):
+        raise TypeError("sparse_cos_similarity can only operate on sparse matrices")
+    return cosine_similarity(mat1, mat2, dense_output = False)
+
+
+def cos_similarity(user_profiles, item_attributes, normalize_users = True, normalize_items = False):
+    """
+    Compute the cosine similarity between user profiles and
+    item attributes to return the scores (utility) each item possesses
+    for each user. We call these matrices `user_profiles` and
+    `item_attributes` but note that you could perform an arbitrary matrix
+    cosine similarity with this method.
+    Parameters
+    -----------
+        user_profiles: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
+            First factor of the cosine similarity, which should provide a
+            representation of users.
+        item_attributes: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
+            Second factor of the cosine similarity, which should provide a
+            representation of items.
+    Returns
+    --------
+        scores: :obj:`numpy.ndarray`
+    """
+    if normalize_users:
+        # this is purely an optimization that prevents numpy from having
+        # to multiply huge numbers
+        user_profiles = mo.normalize_matrix(user_profiles, axis = 1)
+    if normalize_items:
+        item_attributes = mo.normalize_matrix(item_attributes.T, axis = 1).T
+    if user_profiles.shape[1] != item_attributes.shape[0]:
+        error_message = (
+            "Number of attributes in user profile matrix must match number "
+            "of attributes in item profile matrix"
+        )
+        raise ValueError(error_message)
+    scores = mo.generic_matrix_op(cosine_similarity, sparse_cos_sim, user_profiles, item_attributes.T)
+    return scores
+
+
+def sparse_eu_distance(mat1, mat2):
+    """
+    Returns the euclidean distance of two sparse matrices.
+    Parameters
+    -----------
+        mat1: :obj:`scipy.sparse.spmatrix`
+            First factor of the euclidean distance.
+        mat1: :obj:`scipy.sparse.spmatrix`
+            Second factor of the euclidean distance.
+    Returns
+    --------
+        dot_product: :obj:`scipy.sparse.spmatrix`
+    """
+    if not mo.all_sparse(mat1, mat2):
+        raise TypeError("sparse_eu_distance can only operate on sparse matrices")
+    return sparse.csr_matrix(euclidean_distances(mat1, mat2))
+
+
+def euclidean_distance(user_profiles, item_attributes, normalize_users = True, normalize_items = False):
+    """
+    Compute the euclidean distance between user profiles and
+    item attributes to return the scores (utility) each item possesses
+    for each user. We call these matrices `user_profiles` and
+    `item_attributes` but note that you could perform an arbitrary matrix
+    euclidean distance with this method.
+    Parameters
+    -----------
+        user_profiles: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
+            First factor of the euclidean distance, which should provide a
+            representation of users.
+        item_attributes: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
+            Second factor of the euclidean distance, which should provide a
+            representation of items.
+    Returns
+    --------
+        scores: :obj:`numpy.ndarray`
+    """
+    if normalize_users:
+        # this is purely an optimization that prevents numpy from having
+        # to multiply huge numbers
+        user_profiles = mo.normalize_matrix(user_profiles, axis = 1)
+    if normalize_items:
+        item_attributes = mo.normalize_matrix(item_attributes.T, axis = 1).T
+    if user_profiles.shape[1] != item_attributes.shape[0]:
+        error_message = (
+            "Number of attributes in user profile matrix must match number "
+            "of attributes in item profile matrix"
+        )
+        raise ValueError(error_message)
+    scores = mo.generic_matrix_op(euclidean_distances, sparse_eu_distance, user_profiles, item_attributes.T)
+    #return 1. / scores
+    return -scores
+
+
+def dense_pearson_corr(mat1, mat2):
+    """
+    Returns the pearson correlation of two dense matrices.
+    Parameters
+    -----------
+        mat1: :obj:`scipy.sparse.spmatrix`
+            First factor of the pearson correlation.
+        mat1: :obj:`scipy.sparse.spmatrix`
+            Second factor of the pearson correlation.
+    Returns
+    --------
+        dot_product: :obj:`scipy.sparse.spmatrix`
+    """
+
+    if not mo.all_dense(mat1, mat2):
+        raise TypeError("dense pearson_corr can only operate on dense matrices")
+    scores = np.zeros((mat1.shape[0], mat2.shape[1]))
+    for i in range(mat1.shape[0]):
+        for j in range(mat2.shape[1]):
+            scores[i,j] = pearsonr(mat1[i], mat2[:,j])[0]
+    return scores
+
+
+def sparse_pearson_corr(mat1, mat2):
+    """
+    Returns the pearson correlation of two sparse matrices.
+    Parameters
+    -----------
+        mat1: :obj:`scipy.sparse.spmatrix`
+            First factor of the pearson correlation.
+        mat1: :obj:`scipy.sparse.spmatrix`
+            Second factor of the pearson correlation.
+    Returns
+    --------
+        dot_product: :obj:`scipy.sparse.spmatrix`
+    """
+
+    scores = dense_pearson_corr(mat1.toarray(), mat2.toarray())
+    return sparse.csr_matrix(scores)
+
+
+def pearson_correlation(user_profiles, item_attributes, normalize_users = True, normalize_items = False):
+    """
+    Compute the pearson correlation between user profiles and
+    item attributes to return the scores (utility) each item possesses
+    for each user. We call these matrices `user_profiles` and
+    `item_attributes` but note that you could perform an arbitrary matrix
+    pearson correlation with this method.
+    Parameters
+    -----------
+        user_profiles: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
+            First factor of the pearson correlation, which should provide a
+            representation of users.
+        item_attributes: :obj:`numpy.ndarray`, :obj:`scipy.sparse.spmatrix`
+            Second factor of the pearson correlation, which should provide a
+            representation of items.
+    Returns
+    --------
+        scores: :obj:`numpy.ndarray`
+    """
+    if normalize_users:
+        # this is purely an optimization that prevents numpy from having
+        # to multiply huge numbers
+        user_profiles = mo.normalize_matrix(user_profiles, axis = 1)
+    if normalize_items:
+        item_attributes = mo.normalize_matrix(item_attributes.T, axis = 1).T
+    if user_profiles.shape[1] != item_attributes.shape[0]:
+        error_message = (
+            "Number of attributes in user profile matrix must match number "
+            "of attributes in item profile matrix"
+        )
+        raise ValueError(error_message)
+    scores = mo.generic_matrix_op(dense_pearson_corr, sparse_pearson_corr, user_profiles, item_attributes)
+    return scores
+
+
+def scores_with_cost(user_profiles, item_attributes, item_costs, score_fn = inner_product, normalize_users = True, normalize_items = False):
+    scores = score_fn(user_profiles, item_attributes, normalize_users, normalize_items)
+    scores = scores / np.max(scores)
+    if item_costs.shape[0] != item_attributes.shape[1]:
+        error_message = (
+            "Number of item costs must must match number "
+            "of item in item profile matrix"
+        )
+        raise ValueError(error_message)
+    return scores - item_costs
+
+
+def hotelling_scores(user_scores, user_profiles, item_attributes, item_costs, vertical_quality = None, normalize_users = True, normalize_items = False):
+    neg_distance = euclidean_distance(user_profiles, item_attributes, normalize_users, normalize_items)
+    neg_distance = neg_distance / np.max(neg_distance)
+    if user_scores.shape[0] != user_profiles.shape[0] or user_scores.shape[1] != item_attributes.shape[1]:
+        error_message = (
+            "Number of user scores must must match number "
+            "of users in user profile matrix times number"
+            "of item in item profile matrix"
+        )
+        raise ValueError(error_message)
+    if item_costs.shape[0] != item_attributes.shape[1]:
+        error_message = (
+            "Number of item costs must must match number "
+            "of item in item profile matrix"
+        )
+        raise ValueError(error_message)
+    if vertical_quality is not None:
+        if vertical_quality.shape[0] != item_attributes.shape[1]:
+            error_message = (
+                "Number of vertical quality values must must match number "
+                "of item in item profile matrix"
+            )
+            raise ValueError(error_message)
+    return user_scores + vertical_quality + neg_distance - item_costs

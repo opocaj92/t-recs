@@ -6,6 +6,6 @@ from .mf import ImplicitMF
 from .social import SocialFiltering
 from .popularity import PopularityRecommender
 from .random import RandomRecommender
-from .priced import PricedBaseRecommender, PricedContentFiltering, PricedImplicitMF, PricedSocialFiltering, PricedPopularityRecommender, PricedRandomRecommender
+from .hybrid import HybridRecommender, MixedHybrid, EnsembleHybrid
 from .ideal import IdealRecommender
-from .hybrid import HybridRecommender, MixedHybrid, EnsebleHybrid
+from .priced import PricedBaseRecommender, PricedContentFiltering, PricedImplicitMF, PricedSocialFiltering, PricedPopularityRecommender, PricedRandomRecommender
