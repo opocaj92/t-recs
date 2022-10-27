@@ -1,8 +1,8 @@
 import numpy as np
 
-from .recommender import BaseRecommender
-from .content import ContentFiltering
-from .mf import ImplicitMF
+from trecs.models.recommender import BaseRecommender
+from trecs.models.content import ContentFiltering
+from trecs.models.mf import ImplicitMF
 from trecs.validate import validate_user_item_inputs
 from trecs.random import Generator
 
@@ -23,32 +23,12 @@ class HybridRecommender(BaseRecommender):
         model_params = None,
         **kwargs
     ):
-        num_users, num_items, num_attributes = validate_user_item_inputs(
-            num_users,
-            num_items,
-            user_representation,
-            item_representation,
-            actual_user_representation,
-            actual_item_representation,
-            100,
-            1250,
-            1000,
-            num_attributes,
-        )
-
-        if user_representation is None:
-            user_representation = np.zeros((num_users, num_attributes))
-        if item_representation is None:
-            item_representation = Generator(seed = seed).binomial(n = 1, p = 0.5, size = (num_attributes, num_items))
-        if actual_item_representation is None:
-            actual_item_representation = item_representation.copy()
-
         self.content_based = ContentFiltering(
             num_users,
             num_items,
             num_latent_factors,
             user_representation,
-            item_representation,
+            item_representation if item_representation is not None else actual_item_representation.get_component_state()["items"][0],
             actual_user_representation,
             actual_item_representation,
             probabilistic_recommendations,
@@ -72,6 +52,26 @@ class HybridRecommender(BaseRecommender):
             **kwargs
         )
 
+        num_users, num_items, num_attributes = validate_user_item_inputs(
+            num_users,
+            num_items,
+            user_representation,
+            item_representation,
+            actual_user_representation,
+            actual_item_representation,
+            100,
+            1250,
+            1000,
+            num_attributes,
+        )
+
+        if user_representation is None:
+            user_representation = np.zeros((num_users, num_attributes))
+        if item_representation is None:
+            item_representation = Generator(seed = seed).binomial(n = 1, p = 0.5, size = (num_attributes, num_items))
+        if actual_item_representation is None:
+            actual_item_representation = item_representation.copy()
+
         super().__init__(
             user_representation,
             item_representation,
@@ -94,9 +94,6 @@ class HybridRecommender(BaseRecommender):
         self.content_based.train()
         self.collaborative_filtering.train()
         super().train()
-
-    def generate_recommendations(self, k = 1, item_indices = None):
-        return super().generate_recommendations(k, item_indices)
 
     def _update_internal_state(self, interactions):
         self.content_based._update_internal_state(interactions)
