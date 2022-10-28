@@ -62,7 +62,7 @@ class HybridRecommender(BaseRecommender):
             100,
             1250,
             1000,
-            num_attributes,
+            num_attributes = num_attributes,
         )
 
         if user_representation is None:
@@ -117,8 +117,6 @@ class HybridRecommender(BaseRecommender):
         self.collaborative_filtering.num_items += new_items.shape[1]
 
         self.items.append_new_items(new_items)
-        self.content_based.items.append_new_items(new_items)
-        self.collaborative_filtering.items.append_new_items(new_items)
 
         new_items_hat = self.process_new_items(new_items)
 
@@ -134,8 +132,6 @@ class HybridRecommender(BaseRecommender):
         self.collaborative_filtering.predicted_scores.append_item_scores(new_item_pred_score)
 
         self.users.score_new_items(new_items)
-        self.content_based.users.score_new_items(new_items)
-        self.collaborative_filtering.users.score_new_items(new_items)
 
     def add_users(self, new_users, **kwargs):
         self.num_users += new_users.shape[0]
