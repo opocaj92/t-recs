@@ -1210,9 +1210,17 @@ class InteractionRankingMetric(Measurement, Diagnostics):
             )
 
 
-def get_jaccard_pairs(users):
+def get_best_jaccard_pairs(users):
     matrix = np.multiply(cosine_similarity(users, users), np.ones((users.shape[0], users.shape[0])) - np.eye(users.shape[0])) - np.eye(users.shape[0])
     return list(zip(np.arange(users.shape[0]), np.argmax(matrix, axis = 1)))
+
+def get_all_jaccard_pairs(users):
+    pairs = []
+    for i in range(users.shape[0]):
+        for j in range(users.shape[0]):
+            if i != j:
+                pairs.append((i, j))
+    return pairs
 
 
 # FOR DEBUGGING ONLY

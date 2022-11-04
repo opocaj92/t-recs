@@ -1,8 +1,8 @@
 import numpy as np
 
-from trecs.models.recommender import BaseRecommender
-from trecs.models.content import ContentFiltering
-from trecs.models.mf import ImplicitMF
+from .recommender import BaseRecommender
+from .content import ContentFiltering
+from .mf import ImplicitMF
 from trecs.validate import validate_user_item_inputs
 from trecs.random import Generator
 

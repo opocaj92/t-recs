@@ -15,23 +15,20 @@ def enableTqdm():
 
 from trecs.components.users import Users
 from trecs.components.items import Items
-from trecs.models.popularity import PopularityRecommender
-from trecs.models.content import ContentFiltering
-from trecs.models.social import SocialFiltering
-from trecs.models.mf import ImplicitMF
-from trecs.models.random import RandomRecommender
+from trecs.models import PopularityRecommender, ContentFiltering, SocialFiltering, ImplicitMF, RandomRecommender, IdealRecommender, EnsembleHybrid, MixedHybrid
 from trecs.random import Generator
-from trecs.metrics import InteractionMeasurement
-
-from trecs_plus.metrics import RecommendationMetric
-from trecs_plus.matrix_ops import *
+from trecs.metrics import InteractionMeasurement, MSEMeasurement, RecSimilarity, RecommendationMeasurement, InteractionMetric, RecommendationMetric, CorrelationMeasurement, DisutilityMetric, RecommendationRankingMetric, InteractionRankingMetric, get_best_jaccard_pairs, get_all_jaccard_pairs
+from trecs.matrix_ops import inner_product, cos_similarity, euclidean_distance, pearson_correlation
 
 models = {
-  "PR": PopularityRecommender,
-  "CF": ContentFiltering,
-  "SF": SocialFiltering,
-  "IMF": ImplicitMF,
-  "Random": RandomRecommender
+  "popularity_recommender": PopularityRecommender,
+  "content_based": ContentFiltering,
+  "social_filtering": SocialFiltering,
+  "collaborative_filtering": ImplicitMF,
+  "random_recommender": RandomRecommender,
+  "ideal_recommender": IdealRecommender,
+  "ensemble_hybrid": EnsembleHybrid,
+  "mixed_hybrid": MixedHybrid
 }
 
 scores_fn = {
@@ -58,12 +55,16 @@ class parallel_env(ParallelEnv):
                num_users = 100,
                num_items = 500,
                num_attributes = 100,
+               attention_exp = 0,
                pretraining = 1000,
                simulation_steps = 100,
                steps_between_training = 10,
                max_preference_per_attribute = 5,
                train_between_steps = False,
-               costs = None,
+               num_items_per_iter = 10,
+               random_items_per_iter = 0,
+               repeated_items = True,
+               probabilistic_recommendations = True,
                score_fn_name = "inner_product",
                vertically_differentiate = False,
                price_into_observation = False,
@@ -79,20 +80,23 @@ class parallel_env(ParallelEnv):
     self.tot_items = np.sum(self.num_items)
     self.num_users = num_users
     self.num_attributes = num_attributes
+    self.attention_exp = attention_exp
     self.pretraining = pretraining
     self.simulation_steps = simulation_steps
     self.steps_between_training = steps_between_training
     self.max_preference_per_attribute = max_preference_per_attribute
     self.train_between_steps = train_between_steps
-    if costs is None:
-      if vertically_differentiate:
-        self.costs = np.random.random(self.tot_items)
-      else:
-        self.costs = np.zeros(self.tot_items, dtype = float)
-    else:
-      self.costs = costs
+    self.num_items_per_iter = num_items_per_iter
+    self.random_items_per_iter = random_items_per_iter
+    self.repeated_items = repeated_items
+    self.probabilistic_recommendations = probabilistic_recommendations
     self.score_fn = scores_fn[score_fn_name]
+
     self.vertically_differentiate = vertically_differentiate
+    if self.vertically_differentiate:
+      self.costs = np.random.random(self.tot_items)
+    else:
+      self.costs = np.zeros(self.tot_items, dtype = float)
     self.price_into_observation = price_into_observation
     self.savepath = savepath
 
@@ -124,16 +128,32 @@ class parallel_env(ParallelEnv):
 
     if self.rec_type == "IMF":
       blockTqdm()
-      self.rec.run(timesteps = self.steps_between_training, train_between_steps = self.train_between_steps, reset_interactions = False)
+      self.rec.run(
+        timesteps = self.steps_between_training,
+        train_between_steps = self.train_between_steps,
+        random_items_per_iter = self.random_items_per_iter,
+        repeated_items = self.repeated_items,
+        reset_interactions = False
+      )
       enableTqdm()
     else:
-      self.rec.run(timesteps = self.steps_between_training, train_between_steps = self.train_between_steps, disable_tqdm = True)
+      self.rec.run(
+        timesteps = self.steps_between_training,
+        train_between_steps = self.train_between_steps,
+        random_items_per_iter = self.random_items_per_iter,
+        repeated_items = self.repeated_items,
+        disable_tqdm = True
+      )
+
     self.measures = self.rec.get_measurements()
+    self.measures["interaction_histogram"][0] = np.zeros(self.tot_items)
+    self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
 
     period_interactions = np.sum(self.measures["interaction_histogram"][-self.steps_between_training:], axis = 0)
     nonrect_interactions = self.__make_nonrect(period_interactions)
-    # REWARD IS THE HOW MUCH EACH SUPPLIER GAINED OVER THE COST
+    # REWARD IS HOW MUCH EACH SUPPLIER GAINED OVER THE COST
     tmp_rewards = [np.sum(np.multiply(nonrect_interactions[i], epsilons[i])) for i in range(self.num_suppliers)]
+
     # OBSERVATION FOR EACH SUPPLIER IS THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR ITS ITEMS IN THE LAST PERIOD
     period_interactions = period_interactions / np.sum(period_interactions)
     nonrect_interactions = self.__make_nonrect(period_interactions)
@@ -149,6 +169,7 @@ class parallel_env(ParallelEnv):
     self.returns[-1] = self.returns[-1] + tmp_rewards
     observations = {agent: tmp_observations[i] for i, agent in enumerate(self.agents)}
     self.n_steps += 1
+
     env_done = self.n_steps >= self.simulation_steps
     dones = {agent: env_done for agent in self.agents}
     infos = {agent: self.measures for agent in self.agents}
@@ -163,10 +184,14 @@ class parallel_env(ParallelEnv):
     else:
       firm_scores = np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_suppliers))
     self.actual_user_representation = Users(
-      actual_user_profiles = np.concatenate([np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_attributes)),
-                                             firm_scores], axis = 1),
+      actual_user_profiles = np.concatenate([np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_attributes)), firm_scores], axis = 1),
       num_users = self.num_users,
-      size = (self.num_users, self.num_attributes + self.num_suppliers))
+      size = (self.num_users, self.num_attributes + self.num_suppliers),
+      attention_exp = self.attention_exp
+    )
+    best_pairs = get_best_jaccard_pairs(self.actual_user_representation.actual_user_profiles.value)
+    all_pairs = get_all_jaccard_pairs(self.actual_user_representation.actual_user_profiles.value)
+
     # IF WE WANT VERTICAL DIFFERENTIATION, NUMBER OF 1s DEPENDS ON THE COST
     if self.vertically_differentiate:
       items_attributes = np.array([Generator().binomial(n = 1, p = self.costs[i], size = (self.num_attributes)) for i in range(self.tot_items)]).T
@@ -179,28 +204,51 @@ class parallel_env(ParallelEnv):
     # WE HAD A ONE-HOT ENCODING FOR THE SUPPLIER ID
     self.actual_item_representation = Items(
       item_attributes = items_attributes,
-      size = (self.num_attributes + self.num_suppliers, self.tot_items))
+      size = (self.num_attributes + self.num_suppliers, self.tot_items)
+    )
 
     # RS INITIALIZATION AND INITIAL TRAINING
-    if self.rec_type == "content_filtering":
+    if self.rec_type == "content_based" or self.rec_type == "ensemble_hybrid" or self.rec_type == "mixed_hybrid":
       self.rec = models[self.rec_type](num_attributes = self.num_attributes + self.num_suppliers,
                                        actual_user_representation = self.actual_user_representation,
-                                       item_representation = self.actual_item_representation.get_component_state()["items"][0])
+                                       item_representation = self.actual_item_representation.get_component_state()["items"][0],
+                                       actual_item_representation = self.actual_item_representation,
+                                       num_items_per_iter = self.num_items_per_iter,
+                                       probabilistic_recommendations = self.probabilistic_recommendations
+                                       )
     else:
       self.rec = models[self.rec_type](actual_user_representation = self.actual_user_representation,
-                                       actual_item_representation = self.actual_item_representation)
+                                       actual_item_representation = self.actual_item_representation,
+                                       num_items_per_iter = self.num_items_per_iter,
+                                       probabilistic_recommendations = self.probabilistic_recommendations
+                                       )
 
     # WE START WITH PRICE-TAKER SUPPLIERS: p=c
     fn_with_costs = functools.partial(scores_with_cost, scores_fn = self.score_fn, item_costs = self.costs)
     self.rec.users.set_score_function(fn_with_costs)
 
-    self.rec.add_metrics(InteractionMeasurement(), RecommendationMetric())
-    blockTqdm()
-    self.rec.startup_and_train(timesteps = self.pretraining)
-    enableTqdm()
+    self.rec.add_metrics(
+      InteractionMeasurement(),
+      RecSimilarity(best_pairs, name = "rec_similarity_best"),
+      RecSimilarity(all_pairs, name = "rec_similarity_all"),
+      RecommendationMeasurement(),
+      MSEMeasurement(),
+      CorrelationMeasurement(),
+      DisutilityMetric(),
+      RecommendationRankingMetric(self.actual_user_representation),
+      InteractionRankingMetric(self.actual_user_representation),
+      InteractionMetric(),
+      RecommendationMetric()
+    )
+
+    if self.pretraining > 0:
+      blockTqdm()
+      self.rec.startup_and_train(timesteps = self.pretraining, no_new_items = True)
+      enableTqdm()
+
     self.measures = self.rec.get_measurements()
-    self.measures["interaction_histogram"][0] = np.zeros(self.tot_items) + 1e-32
-    self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items) + 1e-32
+    self.measures["interaction_histogram"][0] = np.zeros(self.tot_items)
+    self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
     self.actions_hist = []
     self.returns.append(np.zeros(len(self.possible_agents[:])))
 
@@ -210,6 +258,7 @@ class parallel_env(ParallelEnv):
 
   def render(self, mode = "human"):
     colors = plt.get_cmap("YlGnBu")(np.linspace(0, 1, len(self.possible_agents)))
+
     self.actions_hist = np.array(self.actions_hist, dtype = object)
     nonrect_costs = self.__make_nonrect(self.costs)
     for i, a in enumerate(self.possible_agents):
@@ -239,14 +288,15 @@ class parallel_env(ParallelEnv):
     with open(self.savepath + "/Returns_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pkl", "wb") as f:
       pickle.dump(self.returns, f)
 
-    interactions = self.measures["interaction_histogram"][-self.simulation_steps:]
-    interactions[0] = np.zeros(self.tot_items) + 1e-32
+    interactions = self.measures["interaction_histogram"]
+    interactions[0] = np.zeros(self.tot_items)
     modified_ih = np.cumsum(interactions, axis = 0)
+    modified_ih[0] = modified_ih[0] + 1e-32
     percentages = np.reshape(modified_ih / np.sum(modified_ih, axis = 1)[:, None], (self.simulation_steps, self.tot_items))
     percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.simulation_steps)], dtype = object)
     for i, a in enumerate(self.possible_agents):
       pctg = np.reshape(np.stack(percentages[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
-      plt.plot(np.arange(self.simulation_steps), np.sum(pctg, axis = -1), color = colors[i], label = a)
+      plt.plot(np.arange(self.simulation_steps), np.mean(pctg, axis = -1), color = colors[i], label = a)
       #plt.fill_between(np.arange(self.simulation_steps), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
     plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
     plt.title("Suppliers shares over simulation steps")
@@ -259,9 +309,10 @@ class parallel_env(ParallelEnv):
     with open(self.savepath + "/Shares_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pkl", "wb") as f:
       pickle.dump(percentages, f)
 
-    recommendations = self.measures["recommendation_histogram"][-self.simulation_steps:]
-    recommendations[0] = np.zeros(self.tot_items) + 1e-32
+    recommendations = self.measures["recommendation_histogram"]
+    recommendations[0] = np.zeros(self.tot_items)
     modified_rh = np.cumsum(recommendations, axis = 0)
+    modified_rh[0] = modified_rh[0] + 1e-32
     percentages = np.reshape(modified_rh / np.sum(modified_rh, axis = 1)[:, None], (self.simulation_steps, self.tot_items))
     percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.simulation_steps)], dtype = object)
     for i, a in enumerate(self.possible_agents):

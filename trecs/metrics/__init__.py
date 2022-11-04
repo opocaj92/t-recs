@@ -21,5 +21,6 @@ from .measurement import (
     RankingMetric,
     RecommendationRankingMetric,
     InteractionRankingMetric,
-    get_jaccard_pairs
+    get_best_jaccard_pairs,
+    get_all_jaccard_pairs
 )
