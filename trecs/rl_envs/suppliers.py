@@ -126,7 +126,7 @@ class parallel_env(ParallelEnv):
     fn_with_costs = functools.partial(scores_with_cost, scores_fn = self.score_fn, item_costs = prices)
     self.rec.users.set_score_function(fn_with_costs)
 
-    if self.rec_type == "IMF":
+    if self.rec_type == "collaborative_filtering":
       blockTqdm()
       self.rec.run(
         timesteps = self.steps_between_training,
@@ -220,7 +220,7 @@ class parallel_env(ParallelEnv):
       self.rec = models[self.rec_type](actual_user_representation = self.actual_user_representation,
                                        actual_item_representation = self.actual_item_representation,
                                        num_items_per_iter = self.num_items_per_iter,
-                                       probabilistic_recommendations = self.probabilistic_recommendations
+                                       probabilistic_recommendations = self.probabilistic_recommendations if self.rec_type != "random_recommender" else False
                                        )
 
     # WE START WITH PRICE-TAKER SUPPLIERS: p=c
