@@ -292,7 +292,7 @@ class parallel_env(ParallelEnv):
     interactions[0] = np.zeros(self.tot_items)
     modified_ih = np.cumsum(interactions, axis = 0)
     modified_ih[0] = modified_ih[0] + 1e-32
-    percentages = np.reshape(modified_ih / np.sum(modified_ih, axis = 1)[:, None], (self.pretraining + self.simulation_steps * self.steps_between_training, self.tot_items))
+    percentages = np.reshape(modified_ih / np.sum(modified_ih, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
     percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.simulation_steps)], dtype = object)
     for i, a in enumerate(self.possible_agents):
       pctg = np.reshape(np.stack(percentages[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
@@ -313,7 +313,7 @@ class parallel_env(ParallelEnv):
     recommendations[0] = np.zeros(self.tot_items)
     modified_rh = np.cumsum(recommendations, axis = 0)
     modified_rh[0] = modified_rh[0] + 1e-32
-    percentages = np.reshape(modified_rh / np.sum(modified_rh, axis = 1)[:, None], (self.pretraining + self.simulation_steps * self.steps_between_training, self.tot_items))
+    percentages = np.reshape(modified_rh / np.sum(modified_rh, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
     percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.simulation_steps)], dtype = object)
     for i, a in enumerate(self.possible_agents):
       pctg = np.reshape(np.stack(percentages[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
