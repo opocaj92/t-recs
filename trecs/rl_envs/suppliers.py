@@ -296,8 +296,8 @@ class parallel_env(ParallelEnv):
     percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.simulation_steps)], dtype = object)
     for i, a in enumerate(self.possible_agents):
       pctg = np.reshape(np.stack(percentages[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
-      plt.plot(np.arange(self.simulation_steps), np.mean(pctg, axis = -1), color = colors[i], label = a)
-      #plt.fill_between(np.arange(self.simulation_steps), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
+      plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
+      #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
     plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
     plt.title("Suppliers shares over simulation steps")
     plt.xlabel("Timestep")
@@ -317,8 +317,8 @@ class parallel_env(ParallelEnv):
     percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.simulation_steps)], dtype = object)
     for i, a in enumerate(self.possible_agents):
       pctg = np.reshape(np.stack(percentages[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
-      plt.plot(np.arange(self.simulation_steps), np.mean(pctg, axis = -1), color = colors[i], label = a)
-      #plt.fill_between(np.arange(self.simulation_steps), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
+      plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
+      #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
     plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
     plt.title("Suppliers recommendations over simulation steps")
     plt.xlabel("Timestep")
