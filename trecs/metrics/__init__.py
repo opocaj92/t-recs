@@ -21,6 +21,10 @@ from .measurement import (
     RankingMetric,
     RecommendationRankingMetric,
     InteractionRankingMetric,
-    get_best_jaccard_pairs,
-    get_all_jaccard_pairs
+    most_similar_users_pairs,
+    least_similar_users_pairs,
+    all_users_pairs,
+    NNLSCoefficientsxMetric,
+    NNLSCoefficientsAMetric,
+    NNLSCoefficientsbMetric
 )

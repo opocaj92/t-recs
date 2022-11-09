@@ -17,7 +17,7 @@ from trecs.components.users import Users
 from trecs.components.items import Items
 from trecs.models import PopularityRecommender, ContentFiltering, SocialFiltering, ImplicitMF, RandomRecommender, IdealRecommender, EnsembleHybrid, MixedHybrid
 from trecs.random import Generator
-from trecs.metrics import InteractionMeasurement, MSEMeasurement, RecSimilarity, RecommendationMeasurement, InteractionMetric, RecommendationMetric, CorrelationMeasurement, DisutilityMetric, RecommendationRankingMetric, InteractionRankingMetric, get_best_jaccard_pairs, get_all_jaccard_pairs
+from trecs.metrics import InteractionMeasurement, MSEMeasurement, RecSimilarity, RecommendationMeasurement, InteractionMetric, RecommendationMetric, CorrelationMeasurement, DisutilityMetric, RecommendationRankingMetric, InteractionRankingMetric, most_similar_users_pairs, all_users_pairs
 from trecs.matrix_ops import inner_product, cos_similarity, euclidean_distance, pearson_correlation
 
 models = {
@@ -189,8 +189,8 @@ class parallel_env(ParallelEnv):
       size = (self.num_users, self.num_attributes + self.num_suppliers),
       attention_exp = self.attention_exp
     )
-    best_pairs = get_best_jaccard_pairs(self.actual_user_representation.actual_user_profiles.value)
-    all_pairs = get_all_jaccard_pairs(self.actual_user_representation.actual_user_profiles.value)
+    best_pairs = most_similar_users_pairs(self.actual_user_representation.actual_user_profiles.value)
+    all_pairs = all_users_pairs(self.actual_user_representation.actual_user_profiles.value)
 
     # IF WE WANT VERTICAL DIFFERENTIATION, NUMBER OF 1s DEPENDS ON THE COST
     if self.vertically_differentiate:
@@ -229,7 +229,7 @@ class parallel_env(ParallelEnv):
 
     self.rec.add_metrics(
       InteractionMeasurement(),
-      RecSimilarity(best_pairs, name = "rec_similarity_best"),
+      RecSimilarity(best_pairs, name = "rec_similarity_most"),
       RecSimilarity(all_pairs, name = "rec_similarity_all"),
       RecommendationMeasurement(),
       MSEMeasurement(),
@@ -293,7 +293,7 @@ class parallel_env(ParallelEnv):
     modified_ih = np.cumsum(interactions, axis = 0)
     modified_ih[0] = modified_ih[0] + 1e-32
     percentages = np.reshape(modified_ih / np.sum(modified_ih, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
-    percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.simulation_steps)], dtype = object)
+    percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.pretraining + 1 + self.simulation_steps * self.steps_between_training)], dtype = object)
     for i, a in enumerate(self.possible_agents):
       pctg = np.reshape(np.stack(percentages[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
       plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
@@ -314,7 +314,7 @@ class parallel_env(ParallelEnv):
     modified_rh = np.cumsum(recommendations, axis = 0)
     modified_rh[0] = modified_rh[0] + 1e-32
     percentages = np.reshape(modified_rh / np.sum(modified_rh, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
-    percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.simulation_steps)], dtype = object)
+    percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.pretraining + 1 + self.simulation_steps * self.steps_between_training)], dtype = object)
     for i, a in enumerate(self.possible_agents):
       pctg = np.reshape(np.stack(percentages[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
       plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
