@@ -1210,6 +1210,69 @@ class InteractionRankingMetric(Measurement, Diagnostics):
             )
 
 
+class InteractionAttributesSimilarity(Measurement):
+    def __init__(self, pairs, name = "interaction_attr_similarity", verbose = False):
+        self.pairs = pairs
+        # will eventually be a matrix where each row corresponds to 1 user
+        self.interaction_hist = None
+        Measurement.__init__(self, name, verbose)
+
+    def measure(self, recommender):
+        similarity = 0
+        interactions = recommender.interactions
+        if interactions.size == 0:
+            self.observe(None) # no interactions yet
+            return
+
+        if self.interaction_hist is None:
+            self.interaction_hist = np.copy(interactions).reshape((-1, 1))
+        else:
+            self.interaction_hist = np.hstack([self.interaction_hist, interactions.reshape((-1, 1))])
+
+        for pair in self.pairs:
+            similarity += np.mean(cosine_similarity(recommender.actual_item_attributes.T[self.interaction_hist[pair[0]]],
+                                                    recommender.actual_item_attributes.T[self.interaction_hist[pair[1]]]))
+        self.observe(similarity / len(self.pairs))
+
+
+class RecAttributesSimilarity(Measurement):
+    def __init__(self, pairs, name = "rec_attr_similarity", verbose = False):
+        self.pairs = pairs
+        Measurement.__init__(self, name, verbose)
+
+    def measure(self, recommender):
+        similarity = 0
+        items_shown = recommender.items_shown
+        if items_shown.size == 0:
+            # at the beginning of the simulation, there are no recommendations yet
+            self.observe(None)
+            return
+
+        for pair in self.pairs:
+            similarity += np.mean(cosine_similarity(recommender.actual_item_attributes.T[items_shown[pair[0]]],
+                                                    recommender.actual_item_attributes.T[items_shown[pair[1]]]))
+        self.observe(similarity / len(self.pairs))
+
+
+class RecSummedAttributesSimilarity(Measurement):
+    def __init__(self, pairs, name = "rec_summed_attr_similarity", verbose = False):
+        self.pairs = pairs
+        Measurement.__init__(self, name, verbose)
+
+    def measure(self, recommender):
+        similarity = 0
+        items_shown = recommender.items_shown
+        if items_shown.size == 0:
+            # at the beginning of the simulation, there are no recommendations yet
+            self.observe(None)
+            return
+
+        for pair in self.pairs:
+            similarity +=  cosine_similarity(np.sum(recommender.actual_item_attributes.T[items_shown[pair[0]]], axis = 0, keepdims = True),
+                                            np.sum(recommender.actual_item_attributes.T[items_shown[pair[1]]], axis = 0, keepdims = True))[0, 0]
+        self.observe(similarity / len(self.pairs))
+
+
 def most_similar_users_pairs(users):
     matrix = np.multiply(cosine_similarity(users, users), np.ones((users.shape[0], users.shape[0])) - np.eye(users.shape[0])) - np.eye(users.shape[0])
     return list(zip(np.arange(users.shape[0]), np.argmax(matrix, axis = 1)))
