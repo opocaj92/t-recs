@@ -1273,14 +1273,16 @@ class RecSummedAttributesSimilarity(Measurement):
         self.observe(similarity / len(self.pairs))
 
 
-def most_similar_users_pairs(users):
+def most_similar_users_pair(users):
     matrix = np.multiply(cosine_similarity(users, users), np.ones((users.shape[0], users.shape[0])) - np.eye(users.shape[0])) - np.eye(users.shape[0])
-    return list(zip(np.arange(users.shape[0]), np.argmax(matrix, axis = 1)))
+    idx = np.argmax(matrix)
+    return [idx // users.shape[0], idx % users.shape[0]]
 
 
-def least_similar_users_pairs(users):
+def least_similar_users_pair(users):
     matrix = cosine_similarity(users, users) + np.eye(users.shape[0])
-    return list(zip(np.arange(users.shape[0]), np.argmin(matrix, axis = 1)))
+    idx = np.argmin(matrix)
+    return [idx // users.shape[0], idx % users.shape[0]]
 
 
 def all_users_pairs(users):

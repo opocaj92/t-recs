@@ -17,7 +17,7 @@ from trecs.components.users import Users
 from trecs.components.items import Items
 from trecs.models import PopularityRecommender, ContentFiltering, SocialFiltering, ImplicitMF, RandomRecommender, IdealRecommender, EnsembleHybrid, MixedHybrid
 from trecs.random import Generator
-from trecs.metrics import InteractionMeasurement, MSEMeasurement, RecSimilarity, RecommendationMeasurement, InteractionMetric, RecommendationMetric, CorrelationMeasurement, DisutilityMetric, RecommendationRankingMetric, InteractionRankingMetric, most_similar_users_pairs, all_users_pairs
+from trecs.metrics import InteractionMeasurement, RecommendationMeasurement
 from trecs.matrix_ops import inner_product, cos_similarity, euclidean_distance, pearson_correlation
 
 models = {
@@ -189,8 +189,6 @@ class parallel_env(ParallelEnv):
       size = (self.num_users, self.num_attributes + self.num_suppliers),
       attention_exp = self.attention_exp
     )
-    best_pairs = most_similar_users_pairs(self.actual_user_representation.actual_user_profiles.value)
-    all_pairs = all_users_pairs(self.actual_user_representation.actual_user_profiles.value)
 
     # IF WE WANT VERTICAL DIFFERENTIATION, NUMBER OF 1s DEPENDS ON THE COST
     if self.vertically_differentiate:
@@ -229,16 +227,7 @@ class parallel_env(ParallelEnv):
 
     self.rec.add_metrics(
       InteractionMeasurement(),
-      RecSimilarity(best_pairs, name = "rec_similarity_most"),
-      RecSimilarity(all_pairs, name = "rec_similarity_all"),
-      RecommendationMeasurement(),
-      MSEMeasurement(),
-      CorrelationMeasurement(),
-      DisutilityMetric(),
-      RecommendationRankingMetric(self.actual_user_representation),
-      InteractionRankingMetric(self.actual_user_representation),
-      InteractionMetric(),
-      RecommendationMetric()
+      RecommendationMeasurement()
     )
 
     if self.pretraining > 0:
