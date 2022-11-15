@@ -22,6 +22,7 @@ from .measurement import (
     RecommendationRankingMetric,
     InteractionRankingMetric,
     InteractionAttributesSimilarity,
+    InteractionAttrJaccard,
     RecAttributesSimilarity,
     RecSummedAttributesSimilarity,
     most_similar_users_pair,
