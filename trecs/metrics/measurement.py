@@ -1235,6 +1235,35 @@ class InteractionAttributesSimilarity(Measurement):
         self.observe(similarity / len(self.pairs))
 
 
+class InteractionAttrJaccard(Measurement, Diagnostics):
+    def __init__(
+        self, pairs, name = "interaction_attr_jaccard", verbose = False, diagnostics = False, **kwargs):
+        self.pairs = pairs
+        self.diagnostics = diagnostics
+        Measurement.__init__(self, name, verbose)
+        if diagnostics:
+            Diagnostics.__init__(self, **kwargs)
+
+    def measure(self, recommender):
+        similarity = 0
+        interactions = recommender.interactions
+        if interactions.size == 0:
+            self.observe(None)
+            return
+        pair_sim = []
+        for pair in self.pairs:
+            itemset_1 = set(np.nonzero(recommender.actual_item_attributes.T[interactions[pair[0]]])[0])
+            itemset_2 = set(np.nonzero(recommender.actual_item_attributes.T[interactions[pair[1]]])[0])
+            common = len(itemset_1.intersection(itemset_2))
+            union = len(itemset_1.union(itemset_2))
+            similarity += common / union / len(self.pairs)
+            if self.diagnostics:
+                pair_sim.append(common / union)
+        self.observe(similarity)
+        if self.diagnostics:
+            self.diagnose(np.array(pair_sim))
+
+
 class RecAttributesSimilarity(Measurement):
     def __init__(self, pairs, name = "rec_attr_similarity", verbose = False):
         self.pairs = pairs
