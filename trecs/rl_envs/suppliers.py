@@ -40,7 +40,7 @@ def env(**kwargs):
   return env
 
 class parallel_env(ParallelEnv):
-  metadata = {"render_modes": ["simulation, training"],
+  metadata = {"render_modes": ["simulation", "training"],
               "name": "suppliers_price_v0"}
 
   def __init__(self,
