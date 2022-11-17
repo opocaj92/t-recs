@@ -31,13 +31,6 @@ models = {
   "mixed_hybrid": MixedHybrid
 }
 
-scores_fn = {
-    "inner_product": inner_product,
-    "cosine_similarity": cos_similarity,
-    "euclidean_distance": euclidean_distance,
-    "pearson_correlation": pearson_correlation
-}
-
 def env(**kwargs):
   env = parallel_env(**kwargs)
   env = wrappers.CaptureStdoutWrapper(env)
@@ -47,7 +40,8 @@ def env(**kwargs):
   return env
 
 class parallel_env(ParallelEnv):
-  metadata = {"render_modes": ["human"], "name": "suppliers_price_v0"}
+  metadata = {"render_modes": ["simulation, training"],
+              "name": "suppliers_price_v0"}
 
   def __init__(self,
                rec_type = "random_recommender",
@@ -65,7 +59,6 @@ class parallel_env(ParallelEnv):
                random_items_per_iter = 0,
                repeated_items = True,
                probabilistic_recommendations = True,
-               score_fn_name = "inner_product",
                vertically_differentiate = False,
                price_into_observation = False,
                savepath = ""):
@@ -90,7 +83,6 @@ class parallel_env(ParallelEnv):
     self.random_items_per_iter = random_items_per_iter
     self.repeated_items = repeated_items
     self.probabilistic_recommendations = probabilistic_recommendations
-    self.score_fn = scores_fn[score_fn_name]
 
     self.vertically_differentiate = vertically_differentiate
     if self.vertically_differentiate:
@@ -123,7 +115,7 @@ class parallel_env(ParallelEnv):
     nonrect_epsilons = self.__make_nonrect(epsilons)
     self.actions_hist.append(nonrect_epsilons)
     prices = self.costs + epsilons
-    fn_with_costs = functools.partial(scores_with_cost, scores_fn = self.score_fn, item_costs = prices)
+    fn_with_costs = functools.partial(scores_with_cost, scores_fn = inner_product, item_costs = prices)
     self.rec.users.set_score_function(fn_with_costs)
 
     if self.rec_type == "collaborative_filtering":
@@ -222,7 +214,7 @@ class parallel_env(ParallelEnv):
                                        )
 
     # WE START WITH PRICE-TAKER SUPPLIERS: p=c
-    fn_with_costs = functools.partial(scores_with_cost, scores_fn = self.score_fn, item_costs = self.costs)
+    fn_with_costs = functools.partial(scores_with_cost, scores_fn = inner_product, item_costs = self.costs)
     self.rec.users.set_score_function(fn_with_costs)
 
     self.rec.add_metrics(
@@ -245,90 +237,94 @@ class parallel_env(ParallelEnv):
     self.n_steps = 0
     return {agent: np.zeros(2 * (self.num_items[self.agent_name_mapping[agent]]) + int(self.price_into_observation) * (self.num_items[self.agent_name_mapping[agent]])) for agent in self.agents}
 
-  def render(self, mode = "human"):
+  def render(self, mode = "simulation"):
     colors = plt.get_cmap("YlGnBu")(np.linspace(0, 1, len(self.possible_agents)))
 
-    self.actions_hist = np.array(self.actions_hist, dtype = object)
-    nonrect_costs = self.__make_nonrect(self.costs)
-    for i, a in enumerate(self.possible_agents):
-      ah = nonrect_costs[i] + np.reshape(np.stack(self.actions_hist[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
-      plt.plot(np.arange(self.simulation_steps), np.mean(ah, axis = -1), color = colors[i], label = a)
-      #plt.fill_between(np.arange(self.simulation_steps), np.mean(ah, axis = -1) - np.std(ah, axis = -1), np.mean(ah, axis = -1) + np.std(ah, axis = -1), color = colors[i], alpha = 0.3)
-    plt.title("Suppliers prices over simulation steps")
-    plt.xlabel("Timestep")
-    plt.ylabel(r"Price (cost + $\epsilon_i$)")
-    if len(self.possible_agents) <= 5:
-      plt.legend()
-    plt.savefig(self.savepath + "/Prices_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pdf", bbox_inches = "tight")
-    plt.clf()
-    with open(self.savepath + "/Prices_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pkl", "wb") as f:
-      pickle.dump(self.actions_hist, f)
+    if mode == "training":
+      self.returns = np.array(self.returns)
+      for i, a in enumerate(self.possible_agents):
+        plt.plot(np.arange(self.returns.shape[0]), self.returns[:, i], color = colors[i], label = a)
+      plt.title("RL return over training steps")
+      plt.xlabel("Timestep")
+      plt.ylabel("Return")
+      if len(self.possible_agents) <= 5:
+        plt.legend()
+      plt.savefig(self.savepath + "/Returns.pdf", bbox_inches = "tight")
+      plt.clf()
+      with open(self.savepath + "/Returns.pkl", "wb") as f:
+        pickle.dump(self.returns, f)
 
-    self.returns = np.array(self.returns)
-    for i, a in enumerate(self.possible_agents):
-      plt.plot(np.arange(self.returns.shape[0]), self.returns[:, i], color = colors[i], label = a)
-    plt.title("RL return over training steps")
-    plt.xlabel("Timestep")
-    plt.ylabel("Return")
-    if len(self.possible_agents) <= 5:
-      plt.legend()
-    plt.savefig(self.savepath + "/Returns_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pdf", bbox_inches = "tight")
-    plt.clf()
-    with open(self.savepath + "/Returns_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pkl", "wb") as f:
-      pickle.dump(self.returns, f)
+    else:
+      self.actions_hist = np.array(self.actions_hist, dtype = object)
+      nonrect_costs = self.__make_nonrect(self.costs)
+      for i, a in enumerate(self.possible_agents):
+        ah = nonrect_costs[i] + np.reshape(np.stack(self.actions_hist[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
+        plt.plot(np.arange(self.simulation_steps), np.mean(ah, axis = -1), color = colors[i], label = a)
+        #plt.fill_between(np.arange(self.simulation_steps), np.mean(ah, axis = -1) - np.std(ah, axis = -1), np.mean(ah, axis = -1) + np.std(ah, axis = -1), color = colors[i], alpha = 0.3)
+      plt.title("Suppliers prices over simulation steps")
+      plt.xlabel("Timestep")
+      plt.ylabel(r"Price (cost + $\epsilon_i$)")
+      if len(self.possible_agents) <= 5:
+        plt.legend()
+      plt.savefig(self.savepath + "/Prices.pdf", bbox_inches = "tight")
+      plt.clf()
+      with open(self.savepath + "/Prices.pkl", "wb") as f:
+        pickle.dump(self.actions_hist, f)
 
-    interactions = self.measures["interaction_histogram"]
-    interactions[0] = np.zeros(self.tot_items)
-    modified_ih = np.cumsum(interactions, axis = 0)
-    modified_ih[0] = modified_ih[0] + 1e-32
-    percentages = np.reshape(modified_ih / np.sum(modified_ih, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
-    percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.pretraining + 1 + self.simulation_steps * self.steps_between_training)], dtype = object)
-    for i, a in enumerate(self.possible_agents):
-      pctg = np.reshape(np.stack(percentages[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
-      plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
-      #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
-    plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
-    plt.title("Suppliers shares over simulation steps")
-    plt.xlabel("Timestep")
-    plt.ylabel(r"Market shares %")
-    if len(self.possible_agents) <= 5:
-      plt.legend()
-    plt.savefig(self.savepath + "/Shares_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pdf", bbox_inches = "tight")
-    plt.clf()
-    with open(self.savepath + "/Shares_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pkl", "wb") as f:
-      pickle.dump(percentages, f)
+      interactions = self.measures["interaction_histogram"]
+      interactions[0] = np.zeros(self.tot_items)
+      modified_ih = np.cumsum(interactions, axis = 0)
+      modified_ih[0] = modified_ih[0] + 1e-32
+      percentages = np.reshape(modified_ih / np.sum(modified_ih, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
+      percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.pretraining + 1 + self.simulation_steps * self.steps_between_training)], dtype = object)
+      for i, a in enumerate(self.possible_agents):
+        pctg = np.reshape(np.stack(percentages[:, i]), (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]]))
+        plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
+        #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
+      plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
+      plt.title("Suppliers shares over simulation steps")
+      plt.xlabel("Timestep")
+      plt.ylabel(r"Market shares %")
+      if len(self.possible_agents) <= 5:
+        plt.legend()
+      plt.savefig(self.savepath + "/Shares.pdf", bbox_inches = "tight")
+      plt.clf()
+      with open(self.savepath + "/Shares.pkl", "wb") as f:
+        pickle.dump(percentages, f)
 
-    recommendations = self.measures["recommendation_histogram"]
-    recommendations[0] = np.zeros(self.tot_items)
-    modified_rh = np.cumsum(recommendations, axis = 0)
-    modified_rh[0] = modified_rh[0] + 1e-32
-    percentages = np.reshape(modified_rh / np.sum(modified_rh, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
-    percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.pretraining + 1 + self.simulation_steps * self.steps_between_training)], dtype = object)
-    for i, a in enumerate(self.possible_agents):
-      pctg = np.reshape(np.stack(percentages[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
-      plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
-      #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
-    plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
-    plt.title("Suppliers recommendations over simulation steps")
-    plt.xlabel("Timestep")
-    plt.ylabel(r"Recommendations %")
-    if len(self.possible_agents) <= 5:
-      plt.legend()
-    plt.savefig(self.savepath + "/Recommendations_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pdf", bbox_inches = "tight")
-    plt.clf()
-    with open(self.savepath + "/Recommendations_" + self.rec_type + "_" + ("No" if not self.train_between_steps else "") + "Retrain.pkl", "wb") as f:
-      pickle.dump(percentages, f)
+      recommendations = self.measures["recommendation_histogram"]
+      recommendations[0] = np.zeros(self.tot_items)
+      modified_rh = np.cumsum(recommendations, axis = 0)
+      modified_rh[0] = modified_rh[0] + 1e-32
+      percentages = np.reshape(modified_rh / np.sum(modified_rh, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
+      percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.pretraining + 1 + self.simulation_steps * self.steps_between_training)], dtype = object)
+      for i, a in enumerate(self.possible_agents):
+        pctg = np.reshape(np.stack(percentages[:, i]), (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]]))
+        plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
+        #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
+      plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
+      plt.title("Suppliers recommendations over simulation steps")
+      plt.xlabel("Timestep")
+      plt.ylabel(r"Recommendations %")
+      if len(self.possible_agents) <= 5:
+        plt.legend()
+      plt.savefig(self.savepath + "/Recommendations.pdf", bbox_inches = "tight")
+      plt.clf()
+      with open(self.savepath + "/Recommendations.pkl", "wb") as f:
+        pickle.dump(percentages, f)
 
-    if self.vertically_differentiate:
-      avg_prices = np.mean(np.hstack([np.reshape(np.stack(self.actions_hist[:, self.agent_name_mapping[a]]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]])) for a in self.possible_agents]), axis = 0)
-      plt.scatter(self.costs, avg_prices, color = "C0", alpha = 0.5)
-      plt.title("Items quality-average price ratio")
-      plt.xlabel("Initial cost (proportional to quality)")
-      plt.ylabel(r"Average price")
+      if self.vertically_differentiate:
+        avg_prices = np.hstack([np.mean(np.reshape(np.stack(self.actions_hist[:, self.agent_name_mapping[a]]), (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]])), axis = 1) for a in self.possible_agents])
+        plt.scatter(self.costs, avg_prices, color = "C0", alpha = 0.5)
+        plt.title("Items quality-average price ratio")
+        plt.xlabel("Initial cost (proportional to quality)")
+        plt.ylabel(r"Average price")
+        plt.savefig(self.savepath + "/Quality.pdf", bbox_inches = "tight")
+
+    plt.close("all")
 
   def close(self):
     del self.rec
-    plt.close("all")
 
   def __make_nonrect(self, arr):
     cum_items = np.insert(np.cumsum(self.num_items), 0, 0)

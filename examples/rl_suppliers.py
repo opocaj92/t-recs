@@ -19,7 +19,6 @@ num_items_per_iter = 10
 random_items_per_iter = 0
 repeated_items = True
 probabilistic_recommendations = True
-score_fn_name = "inner_product"
 vertically_differentiate = False
 price_into_observation = False
 
@@ -28,7 +27,7 @@ gamma = 0.9999
 log_interval = 10
 num_envs = 4
 
-savepath = "Results/SuppliersPrice" + ("_VerticallyDifferentiated" if vertically_differentiate else "") + ("_PriceIntoObs" if price_into_observation else "") + ("_MultipleItems" if num_suppliers != num_items else "")
+savepath = "Results/SuppliersPrice"
 os.makedirs(savepath, exist_ok = True)
 
 env = suppliers_parallel_env(
@@ -47,7 +46,6 @@ env = suppliers_parallel_env(
    random_items_per_iter = random_items_per_iter,
    repeated_items = repeated_items,
    probabilistic_recommendations = probabilistic_recommendations,
-   score_fn_name = score_fn_name,
    vertically_differentiate = vertically_differentiate,
    price_into_observation = price_into_observation,
    savepath = savepath
@@ -60,15 +58,16 @@ vec_env = ss.concat_vec_envs_v1(vec_env, num_envs, num_cpus = 4, base_class = "s
 model = PPO("MlpPolicy", vec_env, gamma = gamma)
 print("----------------- TRAINING -----------------")
 model.learn(total_timesteps = training_steps, log_interval = log_interval)
-model.save(savepath + "/suppliers_prices_" + rec_type + "_" + ("No" if not train_between_steps else "") + "Retrain")
+model.save(savepath + "/suppliers_prices")
+vec_env.render(mode = "training")
 vec_env.close()
 
-print("--------------- TRAINING DONE ---------------")
+print("-------------- TRAINING DONE ---------------")
 observations = env.reset()
 env_done = False
 while not env_done:
    actions = {agent: model.predict(observations[agent], deterministic = True)[0] for agent in env.agents}
    observations, _, dones, _ = env.step(actions)
    env_done = list(dones.values())[0]
-env.render()
+env.render(mode = "simulation")
 env.close()
