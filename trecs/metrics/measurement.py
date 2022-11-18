@@ -1255,7 +1255,7 @@ class InteractionAttrJaccard(Measurement, Diagnostics):
             itemset_1 = set(np.nonzero(recommender.actual_item_attributes.T[interactions[pair[0]]])[0])
             itemset_2 = set(np.nonzero(recommender.actual_item_attributes.T[interactions[pair[1]]])[0])
             common = len(itemset_1.intersection(itemset_2))
-            union = len(itemset_1.union(itemset_2))
+            union = len(itemset_1.union(itemset_2)) + 1e-32
             similarity += common / union / len(self.pairs)
             if self.diagnostics:
                 pair_sim.append(common / union)
