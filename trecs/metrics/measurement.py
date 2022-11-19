@@ -933,6 +933,7 @@ class DisutilityMetric(Measurement):
         if items_shown.size == 0:
             self.observe(0.)
             return
+
         items_shown_attrs = recommender.actual_item_attributes[:, items_shown]
         user_profs = recommender.actual_user_profiles
         sim_vals = np.array([cos_similarity(user_profs[i], items_shown_attrs[:, i]) for i in range(recommender.num_users)])
@@ -947,6 +948,7 @@ class RecommendationMeasurement(Measurement):
         if recommender.items_shown.size == 0:
             self.observe(None)
             return
+
         histogram = self.__generate_items_shown_histogram(
             recommender.items_shown, recommender.num_users, recommender.num_items, recommender.num_items_per_iter
         )
@@ -993,6 +995,7 @@ class InteractionMetric(Measurement):
         if recommender.interactions.size == 0:
             self.observe(None)
             return
+
         if self.user is not None:
             history = np.expand_dims(recommender.interactions[self.user], 0)
         else:
@@ -1012,6 +1015,7 @@ class RecommendationMetric(Measurement):
         if recommender.items_shown.size == 0:
             self.observe(None)
             return
+
         if self.user is not None:
             history = np.expand_dims(recommender.items_shown[self.user], 0)
         else:
@@ -1029,6 +1033,7 @@ class ScoreMetric(Measurement):
         if interactions.size == 0:
             self.observe(0.)
             return
+
         user_scores = self.users_profiles.actual_user_scores
         sim_vals = user_scores.get_item_scores(np.expand_dims(interactions, 1))
         self.observe(sim_vals.mean())
@@ -1161,6 +1166,7 @@ class RecommendationRankingMetric(Measurement, Diagnostics):
         if recommender.items_shown.size == 0:
             self.observe(0.)
             return
+
         if self.user is not None:
             rank = np.sum(self.true_rank[recommender.items_shown[self.user]] <= recommender.num_items_per_iter) / float(recommender.num_items_per_iter)
         else:
@@ -1198,7 +1204,7 @@ class InteractionRankingMetric(Measurement, Diagnostics):
         if recommender.interactions.size == 0:
             self.observe(0.)
             return
-        # worst item still gives a non-0 value, may want to change this
+
         if self.user is not None:
             rank = 1. / self.true_rank[recommender.interactions[self.user]]
         else:
@@ -1213,8 +1219,6 @@ class InteractionRankingMetric(Measurement, Diagnostics):
 class InteractionAttributesSimilarity(Measurement):
     def __init__(self, pairs, name = "interaction_attr_similarity", verbose = False):
         self.pairs = pairs
-        # will eventually be a matrix where each row corresponds to 1 user
-        self.interaction_hist = None
         Measurement.__init__(self, name, verbose)
 
     def measure(self, recommender):
@@ -1224,14 +1228,9 @@ class InteractionAttributesSimilarity(Measurement):
             self.observe(None) # no interactions yet
             return
 
-        if self.interaction_hist is None:
-            self.interaction_hist = np.copy(interactions).reshape((-1, 1))
-        else:
-            self.interaction_hist = np.hstack([self.interaction_hist, interactions.reshape((-1, 1))])
-
         for pair in self.pairs:
-            similarity += np.mean(cosine_similarity(recommender.actual_item_attributes.T[self.interaction_hist[pair[0]]],
-                                                    recommender.actual_item_attributes.T[self.interaction_hist[pair[1]]]))
+            similarity += cosine_similarity(recommender.actual_item_attributes.T[interactions[pair[0]]].reshape(1, -1),
+                                            recommender.actual_item_attributes.T[interactions[pair[1]]].reshape(1, -1))[0, 0]
         self.observe(similarity / len(self.pairs))
 
 
@@ -1250,15 +1249,13 @@ class InteractionAttrJaccard(Measurement, Diagnostics):
         if interactions.size == 0:
             self.observe(None)
             return
+
         pair_sim = []
         for pair in self.pairs:
-            itemset_1 = set(np.nonzero(recommender.actual_item_attributes.T[interactions[pair[0]]])[0])
-            itemset_2 = set(np.nonzero(recommender.actual_item_attributes.T[interactions[pair[1]]])[0])
-            common = len(itemset_1.intersection(itemset_2))
-            union = len(itemset_1.union(itemset_2)) + 1e-32
-            similarity += common / union / len(self.pairs)
+            common = np.sum(recommender.actual_item_attributes.T[interactions[pair[0]]] == recommender.actual_item_attributes.T[interactions[pair[1]]])
+            similarity += common / recommender.actual_item_attributes.shape[0] / len(self.pairs)
             if self.diagnostics:
-                pair_sim.append(common / union)
+                pair_sim.append(common / recommender.actual_item_attributes.shape[0])
         self.observe(similarity)
         if self.diagnostics:
             self.diagnose(np.array(pair_sim))
@@ -1297,7 +1294,7 @@ class RecSummedAttributesSimilarity(Measurement):
             return
 
         for pair in self.pairs:
-            similarity +=  cosine_similarity(np.sum(recommender.actual_item_attributes.T[items_shown[pair[0]]], axis = 0, keepdims = True),
+            similarity += cosine_similarity(np.sum(recommender.actual_item_attributes.T[items_shown[pair[0]]], axis = 0, keepdims = True),
                                             np.sum(recommender.actual_item_attributes.T[items_shown[pair[1]]], axis = 0, keepdims = True))[0, 0]
         self.observe(similarity / len(self.pairs))
 
