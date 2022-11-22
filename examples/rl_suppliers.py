@@ -21,10 +21,10 @@ repeated_items = True
 probabilistic_recommendations = True
 vertically_differentiate = False
 price_into_observation = False
+rs_knows_prices = False
 
-training_steps = 50000
+training_steps = 5000000
 gamma = 0.9999
-log_interval = 10
 num_envs = 4
 
 savepath = "Results/SuppliersPrice"
@@ -48,6 +48,7 @@ env = suppliers_parallel_env(
    probabilistic_recommendations = probabilistic_recommendations,
    vertically_differentiate = vertically_differentiate,
    price_into_observation = price_into_observation,
+   rs_knows_prices = rs_knows_prices,
    savepath = savepath
 )
 env = ss.pad_observations_v0(env)
@@ -57,7 +58,7 @@ vec_env = ss.concat_vec_envs_v1(vec_env, num_envs, num_cpus = 4, base_class = "s
 
 model = PPO("MlpPolicy", vec_env, gamma = gamma)
 print("----------------- TRAINING -----------------")
-model.learn(total_timesteps = training_steps, log_interval = log_interval)
+model.learn(total_timesteps = training_steps, progress_bar = True)
 model.save(savepath + "/suppliers_prices")
 vec_env.render(mode = "training")
 vec_env.close()
