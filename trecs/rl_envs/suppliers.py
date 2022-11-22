@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import sys
 import os
 import pickle
+from typing import Union
 
 def blockTqdm():
     sys.stderr = open(os.devnull, "w")
@@ -44,24 +45,24 @@ class parallel_env(ParallelEnv):
               "name": "suppliers_price_v0"}
 
   def __init__(self,
-               rec_type = "random_recommender",
-               num_suppliers = 20,
-               num_users = 100,
-               num_items = 500,
-               num_attributes = 100,
-               attention_exp = 0,
-               pretraining = 1000,
-               simulation_steps = 100,
-               steps_between_training = 10,
-               max_preference_per_attribute = 5,
-               train_between_steps = False,
-               num_items_per_iter = 10,
-               random_items_per_iter = 0,
-               repeated_items = True,
-               probabilistic_recommendations = True,
-               vertically_differentiate = False,
-               price_into_observation = False,
-               savepath = ""):
+               rec_type:str = "random_recommender",
+               num_suppliers:int = 20,
+               num_users:int = 100,
+               num_items:Union[int, list] = 500,
+               num_attributes:int = 100,
+               attention_exp:int = 0,
+               pretraining:int = 1000,
+               simulation_steps:int = 100,
+               steps_between_training:int = 10,
+               max_preference_per_attribute:int = 5,
+               train_between_steps:bool = False,
+               num_items_per_iter:int = 10,
+               random_items_per_iter:int = 0,
+               repeated_items:bool = True,
+               probabilistic_recommendations:bool = True,
+               vertically_differentiate:bool = False,
+               price_into_observation:bool = False,
+               savepath:str = ""):
     super(parallel_env).__init__()
 
     self.rec_type = rec_type
@@ -246,7 +247,7 @@ class parallel_env(ParallelEnv):
         plt.plot(np.arange(self.returns.shape[0]), self.returns[:, i], color = colors[i], label = a)
       plt.title("RL return over training steps")
       plt.xlabel("Timestep")
-      plt.ylabel("Return")
+      plt.ylabel("Episode return")
       if len(self.possible_agents) <= 5:
         plt.legend()
       plt.savefig(self.savepath + "/Returns.pdf", bbox_inches = "tight")
@@ -282,14 +283,14 @@ class parallel_env(ParallelEnv):
         plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
         #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
       plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
-      plt.title("Suppliers shares over simulation steps")
+      plt.title("Suppliers interactions share over simulation steps")
       plt.xlabel("Timestep")
-      plt.ylabel(r"Market shares %")
+      plt.ylabel(r"Interactions share %")
       if len(self.possible_agents) <= 5:
         plt.legend()
-      plt.savefig(self.savepath + "/Shares.pdf", bbox_inches = "tight")
+      plt.savefig(self.savepath + "/Interactions.pdf", bbox_inches = "tight")
       plt.clf()
-      with open(self.savepath + "/Shares.pkl", "wb") as f:
+      with open(self.savepath + "/Interactions.pkl", "wb") as f:
         pickle.dump(percentages, f)
 
       recommendations = self.measures["recommendation_histogram"]
@@ -303,9 +304,9 @@ class parallel_env(ParallelEnv):
         plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
         #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
       plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
-      plt.title("Suppliers recommendations over simulation steps")
+      plt.title("Suppliers recommendations share over simulation steps")
       plt.xlabel("Timestep")
-      plt.ylabel(r"Recommendations %")
+      plt.ylabel(r"Recommendations share %")
       if len(self.possible_agents) <= 5:
         plt.legend()
       plt.savefig(self.savepath + "/Recommendations.pdf", bbox_inches = "tight")
@@ -314,7 +315,7 @@ class parallel_env(ParallelEnv):
         pickle.dump(percentages, f)
 
       if self.vertically_differentiate:
-        avg_prices = np.hstack([np.mean(np.reshape(np.stack(self.actions_hist[:, self.agent_name_mapping[a]]), (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]])), axis = 1) for a in self.possible_agents])
+        avg_prices = np.hstack([np.mean(np.reshape(np.stack(self.actions_hist[:, self.agent_name_mapping[a]]), (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]])), axis = 0) for a in self.possible_agents])
         plt.scatter(self.costs, avg_prices, color = "C0", alpha = 0.5)
         plt.title("Items quality-average price ratio")
         plt.xlabel("Initial cost (proportional to quality)")
