@@ -6,3 +6,8 @@ pandas==1.0.5
 scipy>=1.7.3
 sklearn
 matplotlib
+gym==0.21.0
+PettingZoo==1.17.0
+stable-baselines3==1.6.0
+SuperSuit==3.3.3
+torch==1.12.0

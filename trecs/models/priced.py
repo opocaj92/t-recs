@@ -71,7 +71,7 @@ class PricedBaseRecommender(BaseRecommender):
                 raise TypeError("prices must the same number of items")
         else:
             prices = self.prices
-        fn_with_costs = functools.partial(mo.scores_with_cost, scores_fn = self.score_fn, item_costs = prices)
+        fn_with_costs = functools.partial(mo.scores_with_cost, score_fn = self.score_fn, item_costs = prices)
         self.users.set_score_function(fn_with_costs)
         self.users.compute_user_scores(self.actual_item_attributes)
 

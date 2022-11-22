@@ -58,7 +58,7 @@ vec_env = ss.concat_vec_envs_v1(vec_env, num_envs, num_cpus = 4, base_class = "s
 
 model = PPO("MlpPolicy", vec_env, gamma = gamma)
 print("----------------- TRAINING -----------------")
-model.learn(total_timesteps = training_steps, progress_bar = True)
+model.learn(total_timesteps = training_steps)
 model.save(savepath + "/suppliers_prices")
 vec_env.render(mode = "training")
 vec_env.close()
