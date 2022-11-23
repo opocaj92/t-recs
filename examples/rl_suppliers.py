@@ -5,7 +5,7 @@ import os
 from trecs.rl_envs import suppliers_parallel_env
 
 rec_type = "content_based"
-num_suppliers = 20
+num_suppliers = 5
 num_users = 100
 num_items = num_suppliers
 num_attributes = 100
@@ -15,10 +15,10 @@ simulation_steps = 100
 steps_between_training = 10
 max_preference_per_attribute = 5
 train_between_steps = True
-num_items_per_iter = 10
+num_items_per_iter = 3
 random_items_per_iter = 0
 repeated_items = True
-probabilistic_recommendations = True
+probabilistic_recommendations = False
 vertically_differentiate = False
 price_into_observation = False
 rs_knows_prices = False
