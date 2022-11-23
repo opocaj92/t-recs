@@ -99,7 +99,7 @@ class parallel_env(ParallelEnv):
   @functools.lru_cache(maxsize = None)
   def observation_space(self, agent):
     # FOR EACH SUPPLIER, WE STORE THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR EACH OF ITS ITEMS OVER THE LAST PERIOD
-    return Box(low = 0., high = self.steps_between_training * self.num_users, shape = (2 * (self.num_items[self.agent_name_mapping[agent]]) + int(self.price_into_observation) * (self.num_items[self.agent_name_mapping[agent]]),))
+    return Box(low = 0., high = 1., shape = (2 * (self.num_items[self.agent_name_mapping[agent]]) + int(self.price_into_observation) * (self.num_items[self.agent_name_mapping[agent]]),))
 
   @functools.lru_cache(maxsize = None)
   def action_space(self, agent):
