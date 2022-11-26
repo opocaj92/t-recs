@@ -1,5 +1,7 @@
 from stable_baselines3 import PPO
 import supersuit as ss
+import numpy as np
+import matplotlib.pyplot as plt
 import os
 
 from trecs.rl_envs import ma_suppliers_parallel_env
@@ -28,10 +30,13 @@ num_envs = 4
 learning_rate = 0.0003
 gamma = 0.9999
 training_steps = 5000000
+log_interval = 10
 DEBUG = True
 
 savepath = "Results/MARLSuppliers"
 os.makedirs(savepath, exist_ok = True)
+log_savepath = os.path.join(savepath, "logs")
+os.makedirs(log_savepath, exist_ok = True)
 
 env = ma_suppliers_parallel_env(
    rec_type = rec_type,
@@ -60,9 +65,9 @@ env = ss.pad_action_space_v0(env)
 vec_env = ss.pettingzoo_env_to_vec_env_v1(env)
 vec_env = ss.concat_vec_envs_v1(vec_env, num_envs, num_cpus = 4, base_class = "stable_baselines3")
 
-model = PPO("MlpPolicy", vec_env, learning_rate = learning_rate, gamma = gamma)
+model = PPO("MlpPolicy", vec_env, learning_rate = learning_rate, gamma = gamma, verbose = 1, tensorboard_log = log_savepath)
 print("----------------- TRAINING -----------------")
-model.learn(total_timesteps = training_steps)
+model.learn(total_timesteps = training_steps, log_interval = log_interval)
 model.save(savepath + "/suppliers_prices")
 vec_env.render(mode = "training")
 vec_env.close()
@@ -77,23 +82,20 @@ while not env_done:
 env.render(mode = "simulation")
 env.close()
 
+if num_suppliers == num_items and not price_into_observation:
+   all_possible_states = sum([[np.array([[i, j],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)] for j in range(steps_between_training * num_users + 1)], [])
+   policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten()
+
+   plt.plot(np.arange(len(all_possible_states)), policy, color = "C0")
+   plt.title("Policy representation for all possible states")
+   plt.xlabel("State")
+   plt.ylabel(r"Price ($\epsilon_i$)")
+   plt.savefig(savepath + "/Policy.pdf", bbox_inches = "tight")
+   plt.clf()
+   plt.close("all")
+
 if DEBUG:
    print("------------------- DEBUG ------------------")
-   import numpy as np
-
-   if num_suppliers == num_items and not price_into_observation:
-      all_possible_states = sum([[np.array([[i, j],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)] for j in range(steps_between_training * num_users + 1)], [])
-      policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten()
-
-      import matplotlib.pyplot as plt
-      plt.plot(np.arange(len(all_possible_states)), policy, color = "C0")
-      plt.title("Policy representation for all possible states")
-      plt.xlabel("State")
-      plt.ylabel(r"Price ($\epsilon_i$)")
-      plt.savefig(savepath + "/Policy.pdf", bbox_inches = "tight")
-      plt.clf()
-      plt.close("all")
-
    debug_savepath = os.path.join(savepath, "DEBUG")
    os.makedirs(debug_savepath, exist_ok = True)
 

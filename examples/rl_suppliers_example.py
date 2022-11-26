@@ -1,4 +1,6 @@
 from stable_baselines3 import PPO
+import numpy as np
+import matplotlib.pyplot as plt
 import os
 
 from trecs.rl_envs import suppliers_env
@@ -26,10 +28,12 @@ rs_knows_prices = False
 learning_rate = 0.0003
 gamma = 0.9999
 training_steps = 5000000
-DEBUG = True
+log_interval = 10
 
 savepath = "Results/RLSuppliers"
 os.makedirs(savepath, exist_ok = True)
+log_savepath = os.path.join(savepath, "logs")
+os.makedirs(log_savepath, exist_ok = True)
 
 env = suppliers_env(
    rec_type = rec_type,
@@ -54,9 +58,9 @@ env = suppliers_env(
    savepath = savepath
 )
 
-model = PPO("MlpPolicy", env, learning_rate = learning_rate, gamma = gamma)
+model = PPO("MlpPolicy", env, learning_rate = learning_rate, gamma = gamma, verbose = 1, tensorboard_log = log_savepath)
 print("----------------- TRAINING -----------------")
-model.learn(total_timesteps = training_steps)
+model.learn(total_timesteps = training_steps, log_interval = log_interval)
 model.save(savepath + "/suppliers_prices")
 env.render(mode = "training")
 env.close()
@@ -70,19 +74,14 @@ while not done:
 env.render(mode = "simulation")
 env.close()
 
-if DEBUG:
-   print("------------------- DEBUG ------------------")
-   import numpy as np
+if num_suppliers == num_items and not price_into_observation:
+   all_possible_states = sum([[np.array([[i, j],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)] for j in range(steps_between_training * num_users + 1)], [])
+   policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten()
 
-   if num_suppliers == num_items and not price_into_observation:
-      all_possible_states = sum([[np.array([[i, j],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)] for j in range(steps_between_training * num_users + 1)], [])
-      policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten()
-
-      import matplotlib.pyplot as plt
-      plt.plot(np.arange(len(all_possible_states)), policy, color = "C0")
-      plt.title("Policy representation for all possible states")
-      plt.xlabel("State")
-      plt.ylabel(r"Price ($\epsilon_i$)")
-      plt.savefig(savepath + "/Policy.pdf", bbox_inches = "tight")
-      plt.clf()
-      plt.close("all")
+   plt.plot(np.arange(len(all_possible_states)), policy, color = "C0")
+   plt.title("Policy representation for all possible states")
+   plt.xlabel("State")
+   plt.ylabel(r"Price ($\epsilon_i$)")
+   plt.savefig(savepath + "/Policy.pdf", bbox_inches = "tight")
+   plt.clf()
+   plt.close("all")
