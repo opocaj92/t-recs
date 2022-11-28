@@ -1024,9 +1024,8 @@ class RecommendationMetric(Measurement):
 
 
 class ScoreMetric(Measurement):
-    def __init__(self, users_profiles, name = "score", verbose = False):
+    def __init__(self, name = "score", verbose = False):
         Measurement.__init__(self, name, verbose)
-        self.users_profiles = users_profiles
 
     def measure(self, recommender):
         interactions = recommender.interactions
@@ -1034,8 +1033,7 @@ class ScoreMetric(Measurement):
             self.observe(0.)
             return
 
-        user_scores = self.users_profiles.actual_user_scores
-        sim_vals = user_scores.get_item_scores(np.expand_dims(interactions, 1))
+        sim_vals = recommender.users.actual_user_scores.get_item_scores(np.expand_dims(interactions, 1))
         self.observe(sim_vals.mean())
 
 
@@ -1071,13 +1069,13 @@ class CorrelationMeasurement(Measurement, Diagnostics):
             recommender: :class:`~models.recommender.BaseRecommender`
                 Model that inherits from :class:`~models.recommender.BaseRecommender`.
         """
-        correlations = np.array([pearsonr(recommender.predicted_scores.value[i],
-                                          recommender.users.actual_user_scores.value[i])[0] for i in range(recommender.num_users)])
+        correlations = np.array([pearsonr(recommender.predicted_user_item_scores[i],
+                                          recommender.actual_user_item_scores[i])[0] for i in range(recommender.num_users)])
         self.observe(correlations.mean(), copy = False)
         if self.diagnostics:
             self.diagnose(
-                pearsonr(recommender.predicted_scores.value.mean(axis = 1),
-                         recommender.users.actual_user_scores.value.mean(axis = 1))[0]
+                pearsonr(recommender.predicted_user_item_scores.mean(axis = 1),
+                         recommender.actual_user_item_scores.mean(axis = 1))[0]
             )
 
 
@@ -1088,20 +1086,28 @@ class RankingMetric(Measurement, Diagnostics):
         if diagnostics:
             Diagnostics.__init__(self, **kwargs)
         self.user_profiles = user_profiles
+        self.num_items = self.user_profiles.actual_user_scores.num_items
         if type(user) is not int and user is not None:
             raise ValueError("Parameter user can be either a user index (int) or None.")
         self.user = user
         if self.user == None:
-            self.true_rank = [rankdata(self.user_profiles.actual_user_scores.value[u], method="min") for u in range(self.user_profiles.num_users)]
+            self.true_rank = [rankdata(self.user_profiles.actual_user_scores.value[u], method = "min") for u in range(self.user_profiles.num_users)]
         else:
-            self.true_rank = rankdata(self.user_profiles.actual_user_scores.value[self.user], method="min")
+            self.true_rank = rankdata(self.user_profiles.actual_user_scores.value[self.user], method = "min")
 
     def measure(self, recommender):
+        if recommender.num_items != self.num_items:
+            if self.user == None:
+                self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method = "min") for u in range(self.user_profiles.num_users)])
+            else:
+                self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method = "min")
+            self.num_items = recommender.num_items
+
         if self.user is not None:
-            correct, rank = self.__correctly_ranked(self.user_profiles.actual_user_scores.value[self.user], recommender.predicted_scores.value[self.user])
+            correct, rank = self.__correctly_ranked(self.user_profiles.actual_user_scores.value[self.user], recommender.predicted_user_item_scores[self.user])
             tau = kendalltau(self.true_rank, np.array(rank).flatten())[0]
         else:
-            correct, rank = self.__correctly_ranked(self.user_profiles.actual_user_scores.value, recommender.predicted_scores.value)
+            correct, rank = self.__correctly_ranked(self.user_profiles.actual_user_scores.value, recommender.predicted_user_item_scores)
             tau = np.mean([kendalltau(self.true_rank[u], rank[u], method='min')[0] for u in range(recommender.num_users)])
         self.observe(tau)
         if self.diagnostics:
@@ -1123,7 +1129,7 @@ class RankingMetric(Measurement, Diagnostics):
                         for i, u in enumerate(true_scores[user]):
                             if v == u:
                                 pos[i].append(j)
-            sort_rec = sorted(enumerate(predicted_scores[user]), key=lambda x: x[1])
+            sort_rec = sorted(enumerate(predicted_scores[user]), key = lambda x: x[1])
             rank = [0 for _ in range(num_items)]
             correct = 0
             for i, e in enumerate(sort_rec):
@@ -1152,16 +1158,16 @@ class RecommendationRankingMetric(Measurement, Diagnostics):
             raise ValueError("Parameter user can be either a user index (int) or None.")
         self.user = user
         if self.user == None:
-            self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method="min") for u in range(self.user_profiles.num_users)])
+            self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method = "min") for u in range(self.user_profiles.num_users)])
         else:
-            self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method="min")
+            self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method = "min")
 
     def measure(self, recommender):
         if recommender.num_items != self.num_items:
             if self.user == None:
-                self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method="min") for u in range(self.user_profiles.num_users)])
+                self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method = "min") for u in range(self.user_profiles.num_users)])
             else:
-                self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method="min")
+                self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method = "min")
             self.num_items = recommender.num_items
         if recommender.items_shown.size == 0:
             self.observe(0.)
@@ -1190,16 +1196,16 @@ class InteractionRankingMetric(Measurement, Diagnostics):
             raise ValueError("Parameter user can be either a user index (int) or None.")
         self.user = user
         if self.user == None:
-            self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method="min") for u in range(self.user_profiles.num_users)])
+            self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method = "min") for u in range(self.user_profiles.num_users)])
         else:
-            self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method="min")
+            self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method = "min")
 
     def measure(self, recommender):
         if recommender.num_items != self.num_items:
             if self.user == None:
-                self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method="min") for u in range(self.user_profiles.num_users)])
+                self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method = "min") for u in range(self.user_profiles.num_users)])
             else:
-                self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method="min")
+                self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method = "min")
             self.num_items = recommender.num_items
         if recommender.interactions.size == 0:
             self.observe(0.)
