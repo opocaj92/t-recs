@@ -435,15 +435,15 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             probabilities = np.logspace(0.0, num_items_unseen / 10.0, num=num_items_unseen, base=2)
             probabilities = probabilities / probabilities.sum()
             # same probability to items with same predicted score
-            ranking = rankdata(s_filtered, axis=1, method='min') - 1
-            new_probabilities = probabilities[ranking]
-            new_probabilities = new_probabilities / np.sum(new_probabilities, axis=1, keepdims=True)
-            picks = []
-            for u in range(self.num_users):
-                picks.append(np.random.choice(num_items_unseen, k, replace=False, p=new_probabilities[u]))
-            return np.take_along_axis(rec, np.array(picks), 1)
-            # picks = np.random.choice(num_items_unseen, k, replace=False, p=probabilities)
-            # return rec[:, picks]
+            # ranking = rankdata(s_filtered, axis=1, method='min') - 1
+            # new_probabilities = probabilities[ranking]
+            # new_probabilities = new_probabilities / np.sum(new_probabilities, axis=1, keepdims=True)
+            # picks = []
+            # for u in range(self.num_users):
+            #     picks.append(np.random.choice(num_items_unseen, k, replace=False, p=new_probabilities[u]))
+            # return np.take_along_axis(rec, np.array(picks), 1)
+            picks = np.random.choice(num_items_unseen, k, replace=False, p=probabilities)
+            return rec[:, picks]
             # use softmax rather than logspace to account for ties
             # probabilities = np.exp(s_filtered - np.max(s_filtered, axis = 1, keepdims = True))
             # probabilities = probabilities /  np.sum(probabilities, axis = 1, keepdims = True)
