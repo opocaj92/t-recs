@@ -1096,7 +1096,7 @@ class RankingMetric(Measurement, Diagnostics):
             self.true_rank = rankdata(self.user_profiles.actual_user_scores.value[self.user], method = "min")
 
     def measure(self, recommender):
-        if recommender.num_items != self.num_items:
+        if recommender.num_items != self.num_items or recommender.users.drift > 0:
             if self.user == None:
                 self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method = "min") for u in range(self.user_profiles.num_users)])
             else:
@@ -1163,7 +1163,7 @@ class RecommendationRankingMetric(Measurement, Diagnostics):
             self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method = "min")
 
     def measure(self, recommender):
-        if recommender.num_items != self.num_items:
+        if recommender.num_items != self.num_items or recommender.users.drift > 0:
             if self.user == None:
                 self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method = "min") for u in range(self.user_profiles.num_users)])
             else:
@@ -1201,7 +1201,7 @@ class InteractionRankingMetric(Measurement, Diagnostics):
             self.true_rank = rankdata(-self.user_profiles.actual_user_scores.value[self.user], method = "min")
 
     def measure(self, recommender):
-        if recommender.num_items != self.num_items:
+        if recommender.num_items != self.num_items or recommender.users.drift > 0:
             if self.user == None:
                 self.true_rank = np.array([rankdata(-self.user_profiles.actual_user_scores.value[u], method = "min") for u in range(self.user_profiles.num_users)])
             else:
