@@ -555,10 +555,10 @@ def slerp(mat1, mat2, perc=0.05):
         mat2 = mat2[np.newaxis, :]
     mat1_length = np.linalg.norm(mat1, axis=1)[:, np.newaxis]
     mat2_length = np.linalg.norm(mat2, axis=1)[:, np.newaxis]
-    mat1_norm, mat2_norm = mat1 / mat1_length, mat2 / mat2_length
+    mat1_norm, mat2_norm = mat1 / (mat1_length  + 1e-32), mat2 / (mat2_length + 1e-32) # QUICK HACK TO AVOID DIVISION BY ZERO
     row_dot_product = (mat1_norm * mat2_norm).sum(axis=1)
     # dot every user profile with its corresponding item attributes
-    omega = np.arccos(row_dot_product)
+    omega = np.arccos(np.minimum(row_dot_product, 1.)) # WHEN THE TWO UNIT VECTORS ARE THE SAME, THEIR DOT PRODUCT CAN BE ROUNDED TO SOMETHING A BIT HIGHER THAN 1
     # note: bad things will happen if the vectors are in exactly opposite
     # directions! this is a pathological case; we are using this function
     # to calculate user profile drift after the user selects an item.
@@ -570,10 +570,10 @@ def slerp(mat1, mat2, perc=0.05):
         raise ValueError(
             "Cannot perform spherical interpolation between vectors in opposite direction"
         )
-    sin_o = np.sin(omega)
+    sin_o = np.sin(omega) + 1e-32 # THIS IS A QUICK HACK FOR WHEN sin(x) = 0
     unit_rot = (
-        np.sin((1.0 - perc) * omega) / (sin_o * mat1_norm.T + 1e-32)
-        + np.sin(perc * omega) / (sin_o * mat2_norm.T + 1e-32)
+        np.sin((1.0 - perc) * omega) / sin_o * mat1_norm.T
+        + np.sin(perc * omega) / sin_o * mat2_norm.T
     ).T
     return unit_rot * mat1_length
 
