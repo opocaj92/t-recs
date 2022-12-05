@@ -50,6 +50,7 @@ class env(gym.Env):
                probabilistic_recommendations:bool = True,
                vertically_differentiate:bool = False,
                all_items_identical:bool = False,
+               attributes_into_observation:bool = True,
                price_into_observation:bool = False,
                rs_knows_prices:bool = False,
                savepath:str = ""):
@@ -75,13 +76,16 @@ class env(gym.Env):
     self.vertically_differentiate = vertically_differentiate
     self.costs = np.random.random(self.tot_items) if self.vertically_differentiate else np.zeros(self.tot_items, dtype = float)
     self.all_items_identical = all_items_identical
+    self.attributes_into_observation = attributes_into_observation and not self.all_items_identical
     self.price_into_observation = price_into_observation
     self.rs_knows_prices = rs_knows_prices
     self.savepath = savepath
 
-    self.observation_space = Box(low = 0., high = 1., shape = (2 * (self.num_items[0]) + int(self.price_into_observation) * (self.num_items[0]),))
+    self.observation_space = Box(low = 0., high = 1., shape = (2 * self.num_items[0] + int(self.price_into_observation) * self.num_items[0] + int(self.attributes_into_observation) * (self.num_attributes + self.num_suppliers) * self.num_items[0],))
     self.action_space = Box(low = 0., high = 1., shape = (self.num_items[0],))
-    self.returns = []
+    self.episodes_return = []
+    self.episodes_interaction = []
+    self.episodes_recommendation = []
 
   def step(self, action):
     epsilons = np.hstack([action, self.other_policies])
@@ -116,6 +120,7 @@ class env(gym.Env):
     self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
 
     period_interactions = np.sum(self.measures["interaction_histogram"][-self.steps_between_training:], axis = 0)
+    self.episodes_interaction[-1] += period_interactions[0]
     nonrect_interactions = self.__make_nonrect(period_interactions)
     # REWARD IS HOW MUCH EACH SUPPLIER GAINED OVER THE COST
     reward = np.sum(np.multiply(nonrect_interactions[0], epsilons[0]))
@@ -124,14 +129,17 @@ class env(gym.Env):
     period_interactions = period_interactions / np.sum(period_interactions)
     nonrect_interactions = self.__make_nonrect(period_interactions)
     period_recommendations = np.sum(self.measures["recommendation_histogram"][-self.steps_between_training:], axis = 0)
+    self.episodes_recommendation[-1] += period_recommendations[0]
     period_recommendations = period_recommendations / np.sum(period_recommendations)
     nonrect_recommendations = self.__make_nonrect(period_recommendations)
     obs = np.concatenate([nonrect_interactions[0], nonrect_recommendations[0]])
     if self.price_into_observation:
       nonrect_prices = self.__make_nonrect(prices)
       obs = np.concatenate([obs[0], nonrect_prices[0]])
+    if self.attributes_into_observation:
+      obs = np.concatenate([obs, self.nonrect_attr])
 
-    self.returns[-1] += reward
+    self.episodes_return[-1] += reward
     self.n_steps += 1
     env_done = self.n_steps >= self.simulation_steps
     done = env_done
@@ -140,10 +148,7 @@ class env(gym.Env):
 
   def reset(self):
     # IF WE WANT MULTIPLE ITEMS, WE GIVE DIFFERENT SCORES TO FIRMS TOO
-    if self.tot_items == self.num_suppliers:
-      firm_scores = np.zeros((self.num_users, self.num_suppliers))
-    else:
-      firm_scores = np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_suppliers))
+    firm_scores = np.zeros((self.num_users, self.num_suppliers)) if self.tot_items == self.num_suppliers else np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_suppliers))
     self.actual_user_representation = Users(
       actual_user_profiles = np.concatenate([np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_attributes)), firm_scores], axis = 1),
       num_users = self.num_users,
@@ -204,23 +209,48 @@ class env(gym.Env):
     self.measures["interaction_histogram"][0] = np.zeros(self.tot_items)
     self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
     self.actions_hist = []
-    self.returns.append(0)
+    self.episodes_return.append(0)
+    self.episodes_interaction.append(0)
+    self.episodes_recommendation.append(0)
     self.other_policies = np.random.random(size = (self.tot_items - self.num_items[0]))
 
     self.n_steps = 0
-    return np.zeros(2 * (self.num_items[0]) + int(self.price_into_observation) * (self.num_items[0]))
+    obs = np.zeros(2 * self.num_items[0])
+    if self.price_into_observation:
+      nonrect_costs = self.__make_nonrect(self.costs)[0]
+      obs = np.concatenate([obs, nonrect_costs])
+    if self.attributes_into_observation:
+      self.nonrect_attr = self.__make_nonrect(items_attributes.T)[0]
+      obs = np.concatenate([obs, self.nonrect_attr])
+    return obs
 
   def render(self, mode = "simulation"):
     if mode == "training":
-      plt.plot(np.arange(len(self.returns)), self.returns, color = "C0", label = "Agent")
-      plt.title("RL return over training steps")
+      plt.plot(np.arange(len(self.episodes_return)), self.episodes_return, color = "C0", label = "Agent")
+      plt.title("RL return over training episodes")
       plt.xlabel("Timestep")
       plt.ylabel("Episode return")
       plt.legend()
-      plt.savefig(self.savepath + "/Returns.pdf", bbox_inches = "tight")
+      plt.savefig(os.path.join(self.savepath, "Returns.pdf"), bbox_inches = "tight")
       plt.clf()
-      with open(self.savepath + "/Returns.pkl", "wb") as f:
-        pickle.dump(self.returns, f)
+      with open(os.path.join(self.savepath, "Returns.pkl"), "wb") as f:
+        pickle.dump(self.episodes_return, f)
+
+      fig, ax1 = plt.subplots()
+      ax2 = ax1.twinx()
+      ax1.plot(np.arange(len(self.episodes_interaction)), self.episodes_interaction, color = "C0", label = "Agent")
+      ax2.plot(np.arange(len(self.episodes_recommendation)), self.episodes_recommendation, color = "C0", linestyle = "dashed")
+      plt.title("RL observations over training episodes")
+      ax1.set_xlabel("Timestep")
+      ax1.set_ylabel("Episode interactions")
+      ax2.set_ylabel("Episode recommendations")
+      plt.legend()
+      plt.savefig(os.path.join(self.savepath, "Observations.pdf"), bbox_inches = "tight")
+      plt.clf()
+      with open(os.path.join(self.savepath, "Obs_Interactions.pkl"), "wb") as f:
+        pickle.dump(self.episodes_interaction, f)
+      with open(os.path.join(self.savepath, "Obs_Recommendations.pkl"), "wb") as f:
+        pickle.dump(self.episodes_recommendation, f)
 
     else:
       self.actions_hist = np.array(self.actions_hist, dtype = object)
@@ -233,9 +263,9 @@ class env(gym.Env):
       plt.xlabel("Timestep")
       plt.ylabel(r"Price (cost + $\epsilon_i$)")
       plt.legend()
-      plt.savefig(self.savepath + "/Prices.pdf", bbox_inches = "tight")
+      plt.savefig(os.path.join(self.savepath, "Prices.pdf"), bbox_inches = "tight")
       plt.clf()
-      with open(self.savepath + "/Prices.pkl", "wb") as f:
+      with open(os.path.join(self.savepath, "Prices.pkl"), "wb") as f:
         pickle.dump(self.actions_hist, f)
 
       interactions = self.measures["interaction_histogram"]
@@ -253,9 +283,9 @@ class env(gym.Env):
       plt.xlabel("Timestep")
       plt.ylabel(r"Interactions share %")
       plt.legend()
-      plt.savefig(self.savepath + "/Interactions.pdf", bbox_inches = "tight")
+      plt.savefig(os.path.join(self.savepath, "Interactions.pdf"), bbox_inches = "tight")
       plt.clf()
-      with open(self.savepath + "/Interactions.pkl", "wb") as f:
+      with open(os.path.join(self.savepath, "Interactions.pkl"), "wb") as f:
         pickle.dump(percentages, f)
 
       recommendations = self.measures["recommendation_histogram"]
@@ -273,9 +303,9 @@ class env(gym.Env):
       plt.xlabel("Timestep")
       plt.ylabel(r"Recommendations share %")
       plt.legend()
-      plt.savefig(self.savepath + "/Recommendations.pdf", bbox_inches = "tight")
+      plt.savefig(os.path.join(self.savepath, "Recommendations.pdf"), bbox_inches = "tight")
       plt.clf()
-      with open(self.savepath + "/Recommendations.pkl", "wb") as f:
+      with open(os.path.join(self.savepath, "Recommendations.pkl"), "wb") as f:
         pickle.dump(percentages, f)
 
       if self.vertically_differentiate:
@@ -284,7 +314,7 @@ class env(gym.Env):
         plt.title("Items quality-average price ratio")
         plt.xlabel("Initial cost (proportional to quality)")
         plt.ylabel(r"Average price")
-        plt.savefig(self.savepath + "/Quality.pdf", bbox_inches = "tight")
+        plt.savefig(os.path.join(self.savepath, "Quality.pdf"), bbox_inches = "tight")
     plt.close("all")
 
   def close(self):

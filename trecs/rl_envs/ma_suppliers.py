@@ -59,6 +59,7 @@ class parallel_env(ParallelEnv):
                probabilistic_recommendations:bool = True,
                vertically_differentiate:bool = False,
                all_items_identical:bool = False,
+               attributes_into_observation:bool = True,
                price_into_observation:bool = False,
                rs_knows_prices:bool = False,
                savepath:str = ""):
@@ -84,18 +85,21 @@ class parallel_env(ParallelEnv):
     self.vertically_differentiate = vertically_differentiate
     self.costs = np.random.random(self.tot_items) if self.vertically_differentiate else np.zeros(self.tot_items, dtype = float)
     self.all_items_identical = all_items_identical
+    self.attributes_into_observation = attributes_into_observation and not self.all_items_identical
     self.price_into_observation = price_into_observation
     self.rs_knows_prices = rs_knows_prices
     self.savepath = savepath
 
     self.possible_agents = ["supplier_" + str(r) for r in range(self.num_suppliers)]
     self.agent_name_mapping = dict(zip(self.possible_agents, list(range(len(self.possible_agents)))))
-    self.returns = []
+    self.episodes_return = []
+    self.episodes_interaction = []
+    self.episodes_recommendation = []
 
   @functools.lru_cache(maxsize = None)
   def observation_space(self, agent):
     # FOR EACH SUPPLIER, WE STORE THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR EACH OF ITS ITEMS OVER THE LAST PERIOD
-    return Box(low = 0., high = 1., shape = (2 * (self.num_items[self.agent_name_mapping[agent]]) + int(self.price_into_observation) * (self.num_items[self.agent_name_mapping[agent]]),))
+    return Box(low = 0., high = 1., shape = (2 * self.num_items[self.agent_name_mapping[agent]] + int(self.price_into_observation) * self.num_items[self.agent_name_mapping[agent]] + int(self.attributes_into_observation) * (self.num_attributes + self.num_suppliers) * self.num_items[self.agent_name_mapping[agent]],))
 
   @functools.lru_cache(maxsize = None)
   def action_space(self, agent):
@@ -139,6 +143,7 @@ class parallel_env(ParallelEnv):
     self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
 
     period_interactions = np.sum(self.measures["interaction_histogram"][-self.steps_between_training:], axis = 0)
+    self.episodes_interaction[-1] = self.episodes_interaction[-1] + period_interactions
     nonrect_interactions = self.__make_nonrect(period_interactions)
     # REWARD IS HOW MUCH EACH SUPPLIER GAINED OVER THE COST
     tmp_rewards = [np.sum(np.multiply(nonrect_interactions[i], epsilons[i])) for i in range(self.num_suppliers)]
@@ -147,15 +152,18 @@ class parallel_env(ParallelEnv):
     period_interactions = period_interactions / np.sum(period_interactions)
     nonrect_interactions = self.__make_nonrect(period_interactions)
     period_recommendations = np.sum(self.measures["recommendation_histogram"][-self.steps_between_training:], axis = 0)
+    self.episodes_recommendation[-1] = self.episodes_recommendation[-1] + period_recommendations
     period_recommendations = period_recommendations / np.sum(period_recommendations)
     nonrect_recommendations = self.__make_nonrect(period_recommendations)
     tmp_observations = [np.concatenate([nonrect_interactions[i], nonrect_recommendations[i]]) for i in range(self.num_suppliers)]
     if self.price_into_observation:
       nonrect_prices = self.__make_nonrect(prices)
       tmp_observations = [np.concatenate([tmp_observations[i], nonrect_prices[i]]) for i in range(self.num_suppliers)]
+    if self.attributes_into_observation:
+      tmp_observations = [np.concatenate([tmp_observations[i], self.nonrect_attr[i]]) for i in range(self.num_suppliers)]
 
     rewards = {agent: tmp_rewards[i] for i, agent in enumerate(self.agents)}
-    self.returns[-1] = self.returns[-1] + tmp_rewards
+    self.episodes_return[-1] = self.episodes_return[-1] + tmp_rewards
     observations = {agent: tmp_observations[i] for i, agent in enumerate(self.agents)}
     self.n_steps += 1
 
@@ -168,10 +176,7 @@ class parallel_env(ParallelEnv):
 
   def reset(self):
     # IF WE WANT MULTIPLE ITEMS, WE GIVE DIFFERENT SCORES TO FIRMS TOO
-    if self.tot_items == self.num_suppliers:
-      firm_scores = np.zeros((self.num_users, self.num_suppliers))
-    else:
-      firm_scores = np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_suppliers))
+    firm_scores = np.zeros((self.num_users, self.num_suppliers)) if self.tot_items == self.num_suppliers else np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_suppliers))
     self.actual_user_representation = Users(
       actual_user_profiles = np.concatenate([np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_attributes)), firm_scores], axis = 1),
       num_users = self.num_users,
@@ -232,28 +237,57 @@ class parallel_env(ParallelEnv):
     self.measures["interaction_histogram"][0] = np.zeros(self.tot_items)
     self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
     self.actions_hist = []
-    self.returns.append(np.zeros(len(self.possible_agents[:])))
+    self.episodes_return.append(np.zeros(len(self.possible_agents[:])))
+    self.episodes_interaction.append(np.zeros(len(self.possible_agents[:])))
+    self.episodes_recommendation.append(np.zeros(len(self.possible_agents[:])))
 
     self.agents = self.possible_agents[:]
     self.n_steps = 0
-    return {agent: np.zeros(2 * (self.num_items[self.agent_name_mapping[agent]]) + int(self.price_into_observation) * (self.num_items[self.agent_name_mapping[agent]])) for agent in self.agents}
+    tmp_observations = [np.zeros(2 * self.num_items[i]) for i in range(self.num_suppliers)]
+    if self.price_into_observation:
+      nonrect_costs = self.__make_nonrect(self.costs)
+      tmp_observations = [np.concatenate([tmp_observations[i], nonrect_costs[i]]) for i in range(self.num_suppliers)]
+    if self.attributes_into_observation:
+      self.nonrect_attr = self.__make_nonrect(items_attributes.T)
+      tmp_observations = [np.concatenate([tmp_observations[i], self.nonrect_attr[i]]) for i in range(self.num_suppliers)]
+    return {agent: tmp_observations[i] for i, agent in enumerate(self.agents)}
 
   def render(self, mode = "simulation"):
     colors = plt.get_cmap("YlGnBu")(np.linspace(0, 1, len(self.possible_agents)))
 
     if mode == "training":
-      self.returns = np.array(self.returns)
+      self.episodes_return = np.array(self.episodes_return)
       for i, a in enumerate(self.possible_agents):
-        plt.plot(np.arange(self.returns.shape[0]), self.returns[:, i], color = colors[i], label = a)
-      plt.title("RL return over training steps")
+        plt.plot(np.arange(self.episodes_return.shape[0]), self.episodes_return[:, i], color = colors[i], label = a)
+      plt.title("RL return over training episodes")
       plt.xlabel("Timestep")
       plt.ylabel("Episode return")
       if len(self.possible_agents) <= 5:
         plt.legend()
-      plt.savefig(self.savepath + "/Returns.pdf", bbox_inches = "tight")
+      plt.savefig(os.path.join(self.savepath, "Episode_Returns.pdf"), bbox_inches = "tight")
       plt.clf()
-      with open(self.savepath + "/Returns.pkl", "wb") as f:
-        pickle.dump(self.returns, f)
+      with open(os.path.join(self.savepath, "Episode_Returns.pkl"), "wb") as f:
+        pickle.dump(self.episodes_return, f)
+
+      self.episodes_interaction = np.array(self.episodes_interaction)
+      self.episodes_recommendation = np.array(self.episodes_recommendation)
+      fig, ax1 = plt.subplots()
+      ax2 = ax1.twinx()
+      for i, a in enumerate(self.possible_agents):
+        ax1.plot(np.arange(len(self.episodes_interaction.shape[0])), self.episodes_interaction[:, i], color = colors[i], label = a)
+        ax2.plot(np.arange(len(self.episodes_recommendation.shape[0])), self.episodes_recommendation[:, i], color = colors[i], linestyle = "dashed")
+      plt.title("RL observations over training episodes")
+      ax1.set_xlabel("Timestep")
+      ax1.set_ylabel("Episode interactions")
+      ax2.set_ylabel("Episode recommendations")
+      if len(self.possible_agents) <= 5:
+        plt.legend()
+      plt.savefig(os.path.join(self.savepath, "Observations.pdf"), bbox_inches = "tight")
+      plt.clf()
+      with open(os.path.join(self.savepath, "Obs_Interactions.pkl"), "wb") as f:
+        pickle.dump(self.episodes_interaction, f)
+      with open(os.path.join(self.savepath, "Obs_Recommendations.pkl"), "wb") as f:
+        pickle.dump(self.episodes_recommendation, f)
 
     else:
       self.actions_hist = np.array(self.actions_hist, dtype = object)
@@ -268,9 +302,9 @@ class parallel_env(ParallelEnv):
       plt.ylabel(r"Price (cost + $\epsilon_i$)")
       if len(self.possible_agents) <= 5:
         plt.legend()
-      plt.savefig(self.savepath + "/Prices.pdf", bbox_inches = "tight")
+      plt.savefig(os.path.join(self.savepath, "Prices.pdf"), bbox_inches = "tight")
       plt.clf()
-      with open(self.savepath + "/Prices.pkl", "wb") as f:
+      with open(os.path.join(self.savepath, "Prices.pkl"), "wb") as f:
         pickle.dump(self.actions_hist, f)
 
       interactions = self.measures["interaction_histogram"]
@@ -290,9 +324,9 @@ class parallel_env(ParallelEnv):
       plt.ylabel(r"Interactions share %")
       if len(self.possible_agents) <= 5:
         plt.legend()
-      plt.savefig(self.savepath + "/Interactions.pdf", bbox_inches = "tight")
+      plt.savefig(os.path.join(self.savepath, "Interactions.pdf"), bbox_inches = "tight")
       plt.clf()
-      with open(self.savepath + "/Interactions.pkl", "wb") as f:
+      with open(os.path.join(self.savepath, "Interactions.pkl"), "wb") as f:
         pickle.dump(percentages, f)
 
       recommendations = self.measures["recommendation_histogram"]
@@ -312,9 +346,9 @@ class parallel_env(ParallelEnv):
       plt.ylabel(r"Recommendations share %")
       if len(self.possible_agents) <= 5:
         plt.legend()
-      plt.savefig(self.savepath + "/Recommendations.pdf", bbox_inches = "tight")
+      plt.savefig(os.path.join(self.savepath, "Recommendations.pdf"), bbox_inches = "tight")
       plt.clf()
-      with open(self.savepath + "/Recommendations.pkl", "wb") as f:
+      with open(os.path.join(self.savepath, "Recommendations.pkl"), "wb") as f:
         pickle.dump(percentages, f)
 
       if self.vertically_differentiate:
@@ -323,7 +357,7 @@ class parallel_env(ParallelEnv):
         plt.title("Items quality-average price ratio")
         plt.xlabel("Initial cost (proportional to quality)")
         plt.ylabel(r"Average price")
-        plt.savefig(self.savepath + "/Quality.pdf", bbox_inches = "tight")
+        plt.savefig(os.path.join(self.savepath, "Quality.pdf"), bbox_inches = "tight")
     plt.close("all")
 
   def close(self):
