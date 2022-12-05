@@ -1024,17 +1024,21 @@ class RecommendationMetric(Measurement):
 
 
 class ScoreMetric(Measurement):
-    def __init__(self, name = "score", verbose = False):
+    def __init__(self, name = "score", user = None, verbose = False):
         Measurement.__init__(self, name, verbose)
+        self.user = user
 
     def measure(self, recommender):
         interactions = recommender.interactions
         if interactions.size == 0:
-            self.observe(0.)
+            self.observe(None)
             return
 
-        sim_vals = recommender.users.actual_user_scores.get_item_scores(np.expand_dims(interactions, 1))
-        self.observe(sim_vals.mean())
+        sim_vals = recommender.users.actual_user_scores.get_item_scores(np.expand_dims(interactions, 1)) / np.max(recommender.actual_user_item_scores, axis = 1)
+        if self.user is None:
+            self.observe(sim_vals.mean())
+        else:
+            self.observe(sim_vals[self.user])
 
 
 class CorrelationMeasurement(Measurement, Diagnostics):
@@ -1079,12 +1083,9 @@ class CorrelationMeasurement(Measurement, Diagnostics):
             )
 
 
-class RankingMetric(Measurement, Diagnostics):
-    def __init__(self, user_profiles, name = "ranking", verbose = False, user = None, diagnostics = False, **kwargs):
-        self.diagnostics = diagnostics
+class RankingMetric(Measurement):
+    def __init__(self, user_profiles, name = "ranking", user = None, verbose = False):
         Measurement.__init__(self, name, verbose)
-        if diagnostics:
-            Diagnostics.__init__(self, **kwargs)
         self.user_profiles = user_profiles
         self.num_items = self.user_profiles.actual_user_scores.num_items
         if type(user) is not int and user is not None:
@@ -1110,10 +1111,6 @@ class RankingMetric(Measurement, Diagnostics):
             correct, rank = self.__correctly_ranked(self.user_profiles.actual_user_scores.value, recommender.predicted_user_item_scores)
             tau = np.mean([kendalltau(self.true_rank[u], rank[u], method='min')[0] for u in range(recommender.num_users)])
         self.observe(tau)
-        if self.diagnostics:
-            self.diagnose(
-                np.mean(correct)
-            )
 
     def __correctly_ranked(self, true_scores, predicted_scores):
         num_users = true_scores.shape[0]
@@ -1146,12 +1143,9 @@ class RankingMetric(Measurement, Diagnostics):
         return (all_correct, all_rank)
 
 
-class RecommendationRankingMetric(Measurement, Diagnostics):
-    def __init__(self, user_profiles, name = "recommendation_ranking", verbose = False, user = None, diagnostics = False, **kwargs):
-        self.diagnostics = diagnostics
+class RecommendationRankingMetric(Measurement):
+    def __init__(self, user_profiles, name = "recommendation_ranking", user = None, verbose = False):
         Measurement.__init__(self, name, verbose)
-        if diagnostics:
-            Diagnostics.__init__(self, **kwargs)
         self.user_profiles = user_profiles
         self.num_items = self.user_profiles.actual_user_scores.num_items
         if type(user) is not int and user is not None:
@@ -1178,18 +1172,11 @@ class RecommendationRankingMetric(Measurement, Diagnostics):
         else:
             rank = np.mean(np.sum(np.take_along_axis(self.true_rank, recommender.items_shown, axis = 1) <= recommender.num_items_per_iter, axis = 1) / float(recommender.num_items_per_iter))
         self.observe(rank)
-        if self.diagnostics:
-            self.diagnose(
-                np.sum(np.take_along_axis(self.true_rank, recommender.items_shown, axis = 1) <= recommender.num_items_per_iter, axis = 1) / float(recommender.num_items_per_iter)
-            )
 
 
-class InteractionRankingMetric(Measurement, Diagnostics):
-    def __init__(self, user_profiles, name = "interaction_ranking", verbose = False, user = None, diagnostics = False, **kwargs):
-        self.diagnostics = diagnostics
+class InteractionRankingMetric(Measurement):
+    def __init__(self, user_profiles, name = "interaction_ranking", user = None, verbose = False):
         Measurement.__init__(self, name, verbose)
-        if diagnostics:
-            Diagnostics.__init__(self, **kwargs)
         self.user_profiles = user_profiles
         self.num_items = self.user_profiles.actual_user_scores.num_items
         if type(user) is not int and user is not None:
@@ -1216,10 +1203,6 @@ class InteractionRankingMetric(Measurement, Diagnostics):
         else:
             rank = np.mean(1. / np.take_along_axis(self.true_rank, np.expand_dims(recommender.interactions, 1), axis = 1))
         self.observe(rank)
-        if self.diagnostics:
-            self.diagnose(
-                1. / np.take_along_axis(self.true_rank, np.expand_dims(recommender.interactions, 1), axis = 1)
-            )
 
 
 class InteractionAttributesSimilarity(Measurement):
@@ -1240,14 +1223,11 @@ class InteractionAttributesSimilarity(Measurement):
         self.observe(similarity / len(self.pairs))
 
 
-class InteractionAttrJaccard(Measurement, Diagnostics):
+class InteractionAttrJaccard(Measurement):
     def __init__(
-        self, pairs, name = "interaction_attr_jaccard", verbose = False, diagnostics = False, **kwargs):
+        self, pairs, name = "interaction_attr_jaccard", verbose = False):
         self.pairs = pairs
-        self.diagnostics = diagnostics
         Measurement.__init__(self, name, verbose)
-        if diagnostics:
-            Diagnostics.__init__(self, **kwargs)
 
     def measure(self, recommender):
         similarity = 0
@@ -1260,11 +1240,7 @@ class InteractionAttrJaccard(Measurement, Diagnostics):
         for pair in self.pairs:
             common = np.sum(recommender.actual_item_attributes.T[interactions[pair[0]]] == recommender.actual_item_attributes.T[interactions[pair[1]]])
             similarity += common / recommender.actual_item_attributes.shape[0] / len(self.pairs)
-            if self.diagnostics:
-                pair_sim.append(common / recommender.actual_item_attributes.shape[0])
         self.observe(similarity)
-        if self.diagnostics:
-            self.diagnose(np.array(pair_sim))
 
 
 class RecAttributesSimilarity(Measurement):
