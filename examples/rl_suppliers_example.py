@@ -26,6 +26,7 @@ all_items_identical = False
 attributes_into_observation = True
 price_into_observation = False
 rs_knows_prices = False
+discrete_actions = False
 
 learning_rate = 0.0003
 gamma = 0.9999
@@ -58,6 +59,7 @@ env = suppliers_env(
    attributes_into_observation = attributes_into_observation,
    price_into_observation = price_into_observation,
    rs_knows_prices = rs_knows_prices,
+   discrete_actions = discrete_actions,
    savepath = savepath
 )
 

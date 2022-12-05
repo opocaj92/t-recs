@@ -1,6 +1,6 @@
 import numpy as np
 import gym
-from gym.spaces import Box
+from gym.spaces import Box, MultiDiscrete
 import matplotlib.pyplot as plt
 import sys
 import os
@@ -53,6 +53,7 @@ class env(gym.Env):
                attributes_into_observation:bool = True,
                price_into_observation:bool = False,
                rs_knows_prices:bool = False,
+               discrete_actions:bool = False,
                savepath:str = ""):
     super(env).__init__()
 
@@ -79,10 +80,11 @@ class env(gym.Env):
     self.attributes_into_observation = attributes_into_observation and not self.all_items_identical
     self.price_into_observation = price_into_observation
     self.rs_knows_prices = rs_knows_prices
+    self.discrete_actions = discrete_actions
     self.savepath = savepath
 
     self.observation_space = Box(low = 0., high = 1., shape = (2 * self.num_items[0] + int(self.price_into_observation) * self.num_items[0] + int(self.attributes_into_observation) * (self.num_attributes + self.num_suppliers) * self.num_items[0],))
-    self.action_space = Box(low = 0., high = 1., shape = (self.num_items[0],))
+    self.action_space = MultiDiscrete([100 for _ in range(self.num_items[0])]) if self.discrete_actions else Box(low = 0., high = 1., shape = (self.num_items[0],))
     self.episodes_return = []
     self.episodes_interaction = []
     self.episodes_recommendation = []

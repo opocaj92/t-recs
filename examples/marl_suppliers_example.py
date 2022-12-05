@@ -27,6 +27,7 @@ all_items_identical = False
 attributes_into_observation = True
 price_into_observation = False
 rs_knows_prices = False
+discrete_actions = False
 
 num_envs = 4
 learning_rate = 0.0003
@@ -61,6 +62,7 @@ env = ma_suppliers_parallel_env(
    attributes_into_observation = attributes_into_observation,
    price_into_observation = price_into_observation,
    rs_knows_prices = rs_knows_prices,
+   discrete_actions = discrete_actions,
    savepath = savepath
 )
 env = ss.pad_observations_v0(env)
@@ -130,6 +132,7 @@ if DEBUG:
       attributes_into_observation = attributes_into_observation,
       price_into_observation = price_into_observation,
       rs_knows_prices = rs_knows_prices,
+      discrete_actions = discrete_actions,
       savepath = debug_savepath
    )
    env = ss.pad_observations_v0(env)

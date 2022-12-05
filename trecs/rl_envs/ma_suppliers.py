@@ -1,5 +1,5 @@
 import numpy as np
-from gym.spaces import Box
+from gym.spaces import Box, MultiDiscrete
 from pettingzoo import ParallelEnv
 from pettingzoo.utils import wrappers, parallel_to_aec
 import functools
@@ -62,6 +62,7 @@ class parallel_env(ParallelEnv):
                attributes_into_observation:bool = True,
                price_into_observation:bool = False,
                rs_knows_prices:bool = False,
+               discrete_actions:bool = False,
                savepath:str = ""):
     super(parallel_env).__init__()
 
@@ -88,6 +89,7 @@ class parallel_env(ParallelEnv):
     self.attributes_into_observation = attributes_into_observation and not self.all_items_identical
     self.price_into_observation = price_into_observation
     self.rs_knows_prices = rs_knows_prices
+    self.discrete_actions = discrete_actions
     self.savepath = savepath
 
     self.possible_agents = ["supplier_" + str(r) for r in range(self.num_suppliers)]
@@ -104,7 +106,10 @@ class parallel_env(ParallelEnv):
   @functools.lru_cache(maxsize = None)
   def action_space(self, agent):
     # FOR EACH SUPPLIER, ONE CONTINUOUS ACTION FOR EACH OF ITS ITEMS THAT IS THE PRICE INCREASE OVER THE COST FOR THE NEXT PERIOD
-    return Box(low = 0., high = 1., shape = (self.num_items[self.agent_name_mapping[agent]],))
+    if self.discrete_actions:
+      return MultiDiscrete([100 for _ in range(self.num_items[self.agent_name_mapping[agent]])])
+    else:
+      return Box(low = 0., high = 1., shape = (self.num_items[self.agent_name_mapping[agent]],))
 
   def step(self, actions):
     if not actions:
