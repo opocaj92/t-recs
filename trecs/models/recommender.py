@@ -571,7 +571,8 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             num_recommended = self.num_items_per_iter - num_new_items
 
         # We are restricting to randomly recommend newly created items only if this is the case
-        item_indices = self.indices if (not self.random_newly_created or startup) else self.newly_created_indices
+        item_indices = self.indices
+        random_item_indices = self.indices if (not self.random_newly_created or startup) else self.newly_created_indices
         if not repeated_items:
             # for each user, eliminate items that have been interacted with
             item_indices = item_indices[np.where(item_indices >= 0)]
@@ -584,7 +585,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             if item_indices.shape[1] < num_new_items:
                 self.log("Insufficient number of items left!")
 
-        interleaved_items = self.choose_interleaved_items(num_new_items, item_indices)
+        interleaved_items = self.choose_interleaved_items(num_new_items, random_item_indices)
 
         if num_new_items > 0:
             items = self.random_state.random((self.num_users, self.num_items_per_iter))
