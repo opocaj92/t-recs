@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 import warnings
 import numpy as np
 import scipy.sparse as sp
-from scipy.stats import rankdata
 from tqdm import tqdm
 from trecs.metrics import MeasurementModule
 from trecs.base import SystemStateModule
@@ -178,6 +177,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         num_items_per_iter,
         creators=None,
         probabilistic_recommendations=False,
+        random_newly_created=False,
         measurements=None,
         record_base_state=False,
         system_state=None,
@@ -275,6 +275,10 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         self.random_state = Generator(seed)
         # Matrix keeping track of the items consumed by each user
         self.indices = np.tile(np.arange(num_items), (num_users, 1))
+
+        # Keep track of newly created items in case we want to recommend those
+        self.random_newly_created = random_newly_created
+        self.newly_created_indices = np.tile(np.arange(num_items), (num_users, 1))
 
         # initial metrics measurements (done at the end
         # when the rest of the initial state has been initialized)
@@ -434,6 +438,8 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             num_items_unseen = rec.shape[1]  # number of items unseen per user
             probabilities = np.logspace(0.0, num_items_unseen / 10.0, num=num_items_unseen, base=2)
             probabilities = probabilities / probabilities.sum()
+            picks = np.random.choice(num_items_unseen, k, replace=False, p=probabilities)
+            return rec[:, picks]
             # same probability to items with same predicted score
             # ranking = rankdata(s_filtered, axis=1, method='min') - 1
             # new_probabilities = probabilities[ranking]
@@ -442,8 +448,6 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             # for u in range(self.num_users):
             #     picks.append(np.random.choice(num_items_unseen, k, replace=False, p=new_probabilities[u]))
             # return np.take_along_axis(rec, np.array(picks), 1)
-            picks = np.random.choice(num_items_unseen, k, replace=False, p=probabilities)
-            return rec[:, picks]
             # use softmax rather than logspace to account for ties
             # probabilities = np.exp(s_filtered - np.max(s_filtered, axis = 1, keepdims = True))
             # probabilities = probabilities /  np.sum(probabilities, axis = 1, keepdims = True)
@@ -561,12 +565,13 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             num_new_items = self.num_items_per_iter
             num_recommended = 0
         else:
-            num_new_items = random_items_per_iter
+            num_new_items = np.minimum(random_items_per_iter, self.newly_created_indices.shape[1])
             if vary_random_items_per_iter:
-                num_new_items = self.random_state.integers(0, random_items_per_iter + 1)
+                num_new_items = self.random_state.integers(0, np.minimum(random_items_per_iter, self.newly_created_indices.shape[1]) + 1)
             num_recommended = self.num_items_per_iter - num_new_items
 
-        item_indices = self.indices
+        # We are restricting to randomly recommend newly created items only if this is the case
+        item_indices = self.indices if (not self.random_newly_created or startup) else self.newly_created_indices
         if not repeated_items:
             # for each user, eliminate items that have been interacted with
             item_indices = item_indices[np.where(item_indices >= 0)]
@@ -822,6 +827,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         """
         num_existing_items = self.indices.shape[1]
         new_indices = num_existing_items + np.tile(np.arange(num_new_items), (self.num_users, 1))
+        self.newly_created_indices = new_indices
         self.indices = np.hstack([self.indices, new_indices])
 
     def add_new_user_indices(self, num_new_users):
