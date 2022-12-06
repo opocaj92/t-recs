@@ -136,8 +136,8 @@ class env(gym.Env):
     nonrect_recommendations = self.__make_nonrect(period_recommendations)
     obs = np.concatenate([nonrect_interactions[0], nonrect_recommendations[0]])
     if self.price_into_observation:
-      nonrect_prices = self.__make_nonrect(prices)
-      obs = np.concatenate([obs[0], nonrect_prices[0]])
+      nonrect_prices = self.__make_nonrect(prices)[0]
+      obs = np.concatenate([obs, nonrect_prices])
     if self.attributes_into_observation:
       obs = np.concatenate([obs, self.nonrect_attr])
 
@@ -222,7 +222,7 @@ class env(gym.Env):
       nonrect_costs = self.__make_nonrect(self.costs)[0]
       obs = np.concatenate([obs, nonrect_costs])
     if self.attributes_into_observation:
-      self.nonrect_attr = self.__make_nonrect(items_attributes.T)[0]
+      self.nonrect_attr = self.__make_nonrect(items_attributes.T)[0].flatten()
       obs = np.concatenate([obs, self.nonrect_attr])
     return obs
 
@@ -246,7 +246,7 @@ class env(gym.Env):
       ax1.set_xlabel("Timestep")
       ax1.set_ylabel("Episode interactions")
       ax2.set_ylabel("Episode recommendations")
-      plt.legend()
+      ax1.legend()
       plt.savefig(os.path.join(self.savepath, "Observations.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Obs_Interactions.pkl"), "wb") as f:
@@ -311,8 +311,12 @@ class env(gym.Env):
         pickle.dump(percentages, f)
 
       if self.vertically_differentiate:
-        avg_prices = np.mean(np.reshape(np.stack(self.actions_hist[:, 0]), (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.num_items[0])), axis = 0)
-        plt.scatter(self.costs[:self.num_items[0]], avg_prices, color = "C0", alpha = 0.5)
+        avg_prices = np.mean(np.reshape(np.stack(self.actions_hist[:, 0]), (self.simulation_steps * self.steps_between_training, self.num_items[0])), axis = 0)
+        if self.num_items[0] != 1:
+          std_prices = np.std(np.reshape(np.stack(self.actions_hist[:, 0]), (self.simulation_steps * self.steps_between_training, self.num_items[0])), axis = 0)
+        else:
+          std_prices = None
+        plt.errorbar(self.costs[:self.num_items[0]], avg_prices, yerr = std_prices, fmt = "o", color = "C0", alpha = 0.5, capsize = 5, elinewidth = 1)
         plt.title("Items quality-average price ratio")
         plt.xlabel("Initial cost (proportional to quality)")
         plt.ylabel(r"Average price")

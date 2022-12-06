@@ -165,7 +165,7 @@ class parallel_env(ParallelEnv):
       nonrect_prices = self.__make_nonrect(prices)
       tmp_observations = [np.concatenate([tmp_observations[i], nonrect_prices[i]]) for i in range(self.num_suppliers)]
     if self.attributes_into_observation:
-      tmp_observations = [np.concatenate([tmp_observations[i], self.nonrect_attr[i]]) for i in range(self.num_suppliers)]
+      tmp_observations = [np.concatenate([tmp_observations[i], self.nonrect_attr[i].flatten()]) for i in range(self.num_suppliers)]
 
     rewards = {agent: tmp_rewards[i] for i, agent in enumerate(self.agents)}
     self.episodes_return[-1] = self.episodes_return[-1] + tmp_rewards
@@ -254,7 +254,7 @@ class parallel_env(ParallelEnv):
       tmp_observations = [np.concatenate([tmp_observations[i], nonrect_costs[i]]) for i in range(self.num_suppliers)]
     if self.attributes_into_observation:
       self.nonrect_attr = self.__make_nonrect(items_attributes.T)
-      tmp_observations = [np.concatenate([tmp_observations[i], self.nonrect_attr[i]]) for i in range(self.num_suppliers)]
+      tmp_observations = [np.concatenate([tmp_observations[i], self.nonrect_attr[i].flatten()]) for i in range(self.num_suppliers)]
     return {agent: tmp_observations[i] for i, agent in enumerate(self.agents)}
 
   def render(self, mode = "simulation"):
@@ -286,7 +286,7 @@ class parallel_env(ParallelEnv):
       ax1.set_ylabel("Episode interactions")
       ax2.set_ylabel("Episode recommendations")
       if len(self.possible_agents) <= 5:
-        plt.legend()
+        ax1.legend()
       plt.savefig(os.path.join(self.savepath, "Observations.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Obs_Interactions.pkl"), "wb") as f:
@@ -357,8 +357,12 @@ class parallel_env(ParallelEnv):
         pickle.dump(percentages, f)
 
       if self.vertically_differentiate:
-        avg_prices = np.hstack([np.mean(np.reshape(np.stack(self.actions_hist[:, self.agent_name_mapping[a]]), (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]])), axis = 0) for a in self.possible_agents])
-        plt.scatter(self.costs, avg_prices, color = "C0", alpha = 0.5)
+        avg_prices = np.hstack([np.mean(np.reshape(np.stack(self.actions_hist[:, self.agent_name_mapping[a]]), (self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]])), axis = 0) for a in self.possible_agents])
+        if self.tot_items != self.num_suppliers:
+          std_prices = np.hstack([np.std(np.reshape(np.stack(self.actions_hist[:, self.agent_name_mapping[a]]), (self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]])), axis = 0) for a in self.possible_agents])
+        else:
+          std_prices = None
+        plt.errorbar(self.costs, avg_prices, yerr = std_prices, fmt = "o", color = "C0", alpha = 0.5, capsize = 5, elinewidth = 1)
         plt.title("Items quality-average price ratio")
         plt.xlabel("Initial cost (proportional to quality)")
         plt.ylabel(r"Average price")
