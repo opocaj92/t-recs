@@ -1281,6 +1281,91 @@ class RecSummedAttributesSimilarity(Measurement):
         self.observe(similarity / len(self.pairs))
 
 
+# Wrapper classes to allow dynamic pairs based on a given function for similarity metrics
+class VaryingInteractionSimilarity(InteractionSimilarity):
+    def __init__(self, pairs_fn, user_profiles, name = "interaction_similarity", verbose = False):
+        self.pairs_fn = pairs_fn
+        self.num_items = user_profiles.actual_user_scores.num_items
+        pairs = self.pairs_fn(user_profiles.actual_user_profiles.value)
+        super().__init__(pairs, name, verbose)
+
+    def measure(self, recommender):
+        if recommender.num_items != self.num_items or recommender.users.drift > 0:
+            self.pairs = self.pairs_fn(recommender.actual_user_profiles)
+            self.num_items = recommender.num_items
+        super().measure(recommender)
+
+
+class VaryingInteractionAttributesSimilarity(InteractionAttributesSimilarity):
+    def __init__(self, pairs_fn, user_profiles, name = "interaction_attr_similarity", verbose = False):
+        self.pairs_fn = pairs_fn
+        self.num_items = user_profiles.actual_user_scores.num_items
+        pairs = self.pairs_fn(user_profiles.actual_user_profiles.value)
+        super().__init__(pairs, name, verbose)
+
+    def measure(self, recommender):
+        if recommender.num_items != self.num_items or recommender.users.drift > 0:
+            self.pairs = self.pairs_fn(recommender.actual_user_profiles)
+            self.num_items = recommender.num_items
+        super().measure(recommender)
+
+
+class VaryingInteractionAttrJaccard(InteractionAttrJaccard):
+    def __init__(self, pairs_fn, user_profiles, name = "interaction_attr_jaccard", verbose = False):
+        self.pairs_fn = pairs_fn
+        self.num_items = user_profiles.actual_user_scores.num_items
+        pairs = self.pairs_fn(user_profiles.actual_user_profiles.value)
+        super().__init__(pairs, name, verbose)
+
+    def measure(self, recommender):
+        if recommender.num_items != self.num_items or recommender.users.drift > 0:
+            self.pairs = self.pairs_fn(recommender.actual_user_profiles)
+            self.num_items = recommender.num_items
+        super().measure(recommender)
+
+
+class VaryingRecSimilarity(RecSimilarity):
+    def __init__(self, pairs_fn, user_profiles, name = "rec_similarity", verbose = False):
+        self.pairs_fn = pairs_fn
+        self.num_items = user_profiles.actual_user_scores.num_items
+        pairs = self.pairs_fn(user_profiles.actual_user_profiles.value)
+        super().__init__(pairs, name, verbose)
+
+    def measure(self, recommender):
+        if recommender.num_items != self.num_items or recommender.users.drift > 0:
+            self.pairs = self.pairs_fn(recommender.actual_user_profiles)
+            self.num_items = recommender.num_items
+        super().measure(recommender)
+
+
+class VaryingRecAttributesSimilarity(RecAttributesSimilarity):
+    def __init__(self, pairs_fn, user_profiles, name = "rec_attr_similarity", verbose = False):
+        self.pairs_fn = pairs_fn
+        self.num_items = user_profiles.actual_user_scores.num_items
+        pairs = self.pairs_fn(user_profiles.actual_user_profiles.value)
+        super().__init__(pairs, name, verbose)
+
+    def measure(self, recommender):
+        if recommender.num_items != self.num_items or recommender.users.drift > 0:
+            self.pairs = self.pairs_fn(recommender.actual_user_profiles)
+            self.num_items = recommender.num_items
+        super().measure(recommender)
+
+
+class VaryingRecSummedAttributesSimilarity(RecSummedAttributesSimilarity):
+    def __init__(self, pairs_fn, user_profiles, name = "rec_summed_attr_similarity", verbose = False):
+        self.pairs_fn = pairs_fn
+        self.num_items = user_profiles.actual_user_scores.num_items
+        pairs = self.pairs_fn(user_profiles.actual_user_profiles.value)
+        super().__init__(pairs, name, verbose)
+
+    def measure(self, recommender):
+        if recommender.num_items != self.num_items or recommender.users.drift > 0:
+            self.pairs = self.pairs_fn(recommender.actual_user_profiles)
+            self.num_items = recommender.num_items
+        super().measure(recommender)
+
+
 def most_similar_users_pair(users):
     matrix = np.multiply(cosine_similarity(users, users), np.ones((users.shape[0], users.shape[0])) - np.eye(users.shape[0])) - np.eye(users.shape[0])
     idx = np.argmax(matrix)
