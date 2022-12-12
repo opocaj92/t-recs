@@ -277,7 +277,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         self.indices = np.tile(np.arange(num_items), (num_users, 1))
 
         # Keep track of newly created items in case we want to recommend those
-        self.random_newly_created = random_newly_created
+        self.random_newly_created = random_newly_created if self.creators is not None else False
         self.newly_created_indices = np.tile(np.arange(num_items), (num_users, 1))
 
         # initial metrics measurements (done at the end
