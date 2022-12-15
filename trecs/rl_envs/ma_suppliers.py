@@ -16,7 +16,7 @@ def enableTqdm():
     sys.stderr = sys.__stderr__
 
 from trecs.components import Users, Items
-from trecs_plus.models import PricedPopularityRecommender, PricedContentFiltering, PricedSocialFiltering, PricedImplicitMF, PricedRandomRecommender, PricedIdealRecommender
+from trecs.models import PricedPopularityRecommender, PricedContentFiltering, PricedSocialFiltering, PricedImplicitMF, PricedRandomRecommender, PricedIdealRecommender
 from trecs.random import Generator
 from trecs.metrics import InteractionMeasurement, RecommendationMeasurement
 
@@ -157,11 +157,11 @@ class parallel_env(ParallelEnv):
     tmp_rewards = [np.sum(np.multiply(nonrect_interactions[i], epsilons[i])) for i in range(self.num_suppliers)]
 
     # OBSERVATION FOR EACH SUPPLIER IS THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR ITS ITEMS IN THE LAST PERIOD
-    period_interactions = period_interactions / np.sum(period_interactions)
+    period_interactions = period_interactions / (self.num_users * self.steps_between_training)
     nonrect_interactions = self.__make_nonrect(period_interactions)
     period_recommendations = np.sum(self.measures["recommendation_histogram"][-self.steps_between_training:], axis = 0)
     self.episodes_recommendation[-1] = self.episodes_recommendation[-1] + period_recommendations
-    period_recommendations = period_recommendations / np.sum(period_recommendations)
+    period_recommendations = period_recommendations / (self.num_users * self.steps_between_training)
     nonrect_recommendations = self.__make_nonrect(period_recommendations)
     tmp_observations = [np.concatenate([nonrect_interactions[i], nonrect_recommendations[i]]) for i in range(self.num_suppliers)]
     if self.price_into_observation:
@@ -230,11 +230,7 @@ class parallel_env(ParallelEnv):
                                        probabilistic_recommendations = self.probabilistic_recommendations if self.rec_type != "random_recommender" else False
                                        )
     self.rec.set_items_price_for_users(self.costs)
-
-    self.rec.add_metrics(
-      InteractionMeasurement(),
-      RecommendationMeasurement()
-    )
+    self.rec.add_metrics(InteractionMeasurement(), RecommendationMeasurement())
 
     if self.pretraining > 0:
       blockTqdm()

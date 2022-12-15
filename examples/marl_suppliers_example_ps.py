@@ -140,7 +140,7 @@ if DEBUG:
    env = ss.pad_observations_v0(env)
    env = ss.pad_action_space_v0(env)
 
-   policies = np.choice([0., 0.25, 0.5, 0.75, 1.], size = (len(env.agents)))
+   policies = np.random.choice([0., 0.25, 0.5, 0.75, 1.], size = (num_suppliers))
    repetitions = num_items if type(num_items) == list else [num_items // num_suppliers for _ in range(num_suppliers)]
 
    _ = env.reset()

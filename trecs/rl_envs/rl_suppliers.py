@@ -130,11 +130,11 @@ class env(gym.Env):
     reward = np.sum(np.multiply(nonrect_interactions[0], epsilons[0]))
 
     # OBSERVATION FOR EACH SUPPLIER IS THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR ITS ITEMS IN THE LAST PERIOD
-    period_interactions = period_interactions / np.sum(period_interactions)
+    period_interactions = period_interactions / (self.num_users * self.steps_between_training)
     nonrect_interactions = self.__make_nonrect(period_interactions)
     period_recommendations = np.sum(self.measures["recommendation_histogram"][-self.steps_between_training:], axis = 0)
     self.episodes_recommendation[-1] += period_recommendations[0]
-    period_recommendations = period_recommendations / np.sum(period_recommendations)
+    period_recommendations = period_recommendations / (self.num_users * self.steps_between_training)
     nonrect_recommendations = self.__make_nonrect(period_recommendations)
     obs = np.concatenate([nonrect_interactions[0], nonrect_recommendations[0]])
     if self.price_into_observation:
@@ -198,11 +198,7 @@ class env(gym.Env):
                                        probabilistic_recommendations = self.probabilistic_recommendations if self.rec_type != "random_recommender" else False
                                        )
     self.rec.set_items_price_for_users(self.costs)
-
-    self.rec.add_metrics(
-      InteractionMeasurement(),
-      RecommendationMeasurement()
-    )
+    self.rec.add_metrics(InteractionMeasurement(), RecommendationMeasurement())
 
     if self.pretraining > 0:
       blockTqdm()
