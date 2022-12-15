@@ -90,6 +90,8 @@ class env(gym.Env):
     self.episodes_recommendation = []
 
   def step(self, action):
+    if self.discrete_actions:
+      action = action / 100
     epsilons = np.hstack([action, self.other_policies])
     nonrect_epsilons = self.__make_nonrect(epsilons)
     self.actions_hist.append(nonrect_epsilons)

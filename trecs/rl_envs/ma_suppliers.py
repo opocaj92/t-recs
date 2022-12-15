@@ -16,7 +16,7 @@ def enableTqdm():
     sys.stderr = sys.__stderr__
 
 from trecs.components import Users, Items
-from trecs.models import PricedPopularityRecommender, PricedContentFiltering, PricedSocialFiltering, PricedImplicitMF, PricedRandomRecommender, PricedIdealRecommender
+from trecs_plus.models import PricedPopularityRecommender, PricedContentFiltering, PricedSocialFiltering, PricedImplicitMF, PricedRandomRecommender, PricedIdealRecommender
 from trecs.random import Generator
 from trecs.metrics import InteractionMeasurement, RecommendationMeasurement
 
@@ -117,6 +117,8 @@ class parallel_env(ParallelEnv):
       self.agents = []
       return {}, {}, {}, {}
 
+    if self.discrete_actions:
+      actions = {k: actions[k] / 100 for k in actions.keys()}
     epsilons = np.hstack(list(actions.values()))
     nonrect_epsilons = self.__make_nonrect(epsilons)
     self.actions_hist.append(nonrect_epsilons)
