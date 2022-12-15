@@ -78,7 +78,7 @@ model.save(os.path.join(savepath, "suppliers_prices"))
 vec_env.render(mode = "training")
 vec_env.close()
 
-print("-------------- TRAINING DONE ---------------")
+print("---------------- SIMULATION ----------------")
 observations = env.reset()
 env_done = False
 while not env_done:

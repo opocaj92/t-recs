@@ -31,10 +31,11 @@ models = {
 
 def env(**kwargs):
   env = parallel_env(**kwargs)
+  env = parallel_to_aec(env)
   env = wrappers.CaptureStdoutWrapper(env)
   env = wrappers.ClipOutOfBoundsWrapper(env)
+  # env = wrappers.AssertOutOfBoundsWrapper(env)
   env = wrappers.OrderEnforcingWrapper(env)
-  env = parallel_to_aec(env)
   return env
 
 class parallel_env(ParallelEnv):
@@ -261,9 +262,9 @@ class parallel_env(ParallelEnv):
     colors = plt.get_cmap("YlGnBu")(np.linspace(0, 1, len(self.possible_agents)))
 
     if mode == "training":
-      self.episodes_return = np.array(self.episodes_return)
+      episodes_return = np.array(self.episodes_return)
       for i, a in enumerate(self.possible_agents):
-        plt.plot(np.arange(self.episodes_return.shape[0]), self.episodes_return[:, i], color = colors[i], label = a)
+        plt.plot(np.arange(episodes_return.shape[0]), episodes_return[:, i], color = colors[i], label = a)
       plt.title("RL return over training episodes")
       plt.xlabel("Timestep")
       plt.ylabel("Episode return")
@@ -272,15 +273,15 @@ class parallel_env(ParallelEnv):
       plt.savefig(os.path.join(self.savepath, "Episode_Returns.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Episode_Returns.pkl"), "wb") as f:
-        pickle.dump(self.episodes_return, f)
+        pickle.dump(episodes_return, f)
 
-      self.episodes_interaction = np.array(self.episodes_interaction)
-      self.episodes_recommendation = np.array(self.episodes_recommendation)
+      episodes_interaction = np.array(self.episodes_interaction)
+      episodes_recommendation = np.array(self.episodes_recommendation)
       fig, ax1 = plt.subplots()
       ax2 = ax1.twinx()
       for i, a in enumerate(self.possible_agents):
-        ax1.plot(np.arange(len(self.episodes_interaction.shape[0])), self.episodes_interaction[:, i], color = colors[i], label = a)
-        ax2.plot(np.arange(len(self.episodes_recommendation.shape[0])), self.episodes_recommendation[:, i], color = colors[i], linestyle = "dashed")
+        ax1.plot(np.arange(episodes_interaction.shape[0]), episodes_interaction[:, i], color = colors[i], label = a)
+        ax2.plot(np.arange(episodes_recommendation.shape[0]), episodes_recommendation[:, i], color = colors[i], linestyle = "dashed")
       plt.title("RL observations over training episodes")
       ax1.set_xlabel("Timestep")
       ax1.set_ylabel("Episode interactions")
@@ -290,15 +291,15 @@ class parallel_env(ParallelEnv):
       plt.savefig(os.path.join(self.savepath, "Observations.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Obs_Interactions.pkl"), "wb") as f:
-        pickle.dump(self.episodes_interaction, f)
+        pickle.dump(episodes_interaction, f)
       with open(os.path.join(self.savepath, "Obs_Recommendations.pkl"), "wb") as f:
-        pickle.dump(self.episodes_recommendation, f)
+        pickle.dump(episodes_recommendation, f)
 
     else:
-      self.actions_hist = np.array(self.actions_hist, dtype = object)
+      actions_hist = np.array(self.actions_hist, dtype = object)
       nonrect_costs = self.__make_nonrect(self.costs)
       for i, a in enumerate(self.possible_agents):
-        ah = nonrect_costs[i] + np.reshape(np.stack(self.actions_hist[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
+        ah = nonrect_costs[i] + np.reshape(np.stack(actions_hist[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
         ah = np.concatenate([np.repeat(np.expand_dims(nonrect_costs[i], 0), self.pretraining + 1, axis = 0), np.repeat(ah, self.steps_between_training, axis = 0)], axis = 0)
         plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(ah, axis = -1), color = colors[i], label = a)
         #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(ah, axis = -1) - np.std(ah, axis = -1), np.mean(ah, axis = -1) + np.std(ah, axis = -1), color = colors[i], alpha = 0.3)
@@ -310,7 +311,7 @@ class parallel_env(ParallelEnv):
       plt.savefig(os.path.join(self.savepath, "Prices.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Prices.pkl"), "wb") as f:
-        pickle.dump(self.actions_hist, f)
+        pickle.dump(actions_hist, f)
 
       interactions = self.measures["interaction_histogram"]
       interactions[0] = np.zeros(self.tot_items)

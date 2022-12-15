@@ -71,7 +71,7 @@ model.save(os.path.join(savepath, "suppliers_prices"))
 env.render(mode = "training")
 env.close()
 
-print("-------------- TRAINING DONE ---------------")
+print("---------------- SIMULATION ----------------")
 obs = env.reset()
 done = False
 while not done:
