@@ -33,8 +33,8 @@ def env(**kwargs):
   env = parallel_env(**kwargs)
   env = parallel_to_aec(env)
   env = wrappers.CaptureStdoutWrapper(env)
-  env = wrappers.ClipOutOfBoundsWrapper(env)
-  # env = wrappers.AssertOutOfBoundsWrapper(env)
+  if "discrete_actions" in kwargs and not kwargs["discrete_actions"]:
+    env = wrappers.ClipOutOfBoundsWrapper(env)
   env = wrappers.OrderEnforcingWrapper(env)
   return env
 

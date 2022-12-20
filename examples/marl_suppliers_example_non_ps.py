@@ -115,9 +115,13 @@ if num_suppliers == num_items and not price_into_observation and not attributes_
          model = partners[p].model
          name = "partner_" + str(p + 1)
       all_possible_states = sum([[np.array([[i, j],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)] for j in range(steps_between_training * num_users + 1)], [])
-      policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten()
+      policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten().reshape((steps_between_training * num_users + 1, steps_between_training * num_users + 1))
+      for i in range(steps_between_training * num_users + 1):
+         for j in range(steps_between_training * num_users + 1):
+            if i > j:
+               policy[i][j] = np.nan
 
-      hm = sns.heatmap(policy.reshape((steps_between_training * num_users + 1, steps_between_training * num_users + 1)), linewidths = 0.2, square = True, cmap = "YlOrRd")
+      hm = sns.heatmap(policy, linewidths = 0.2, square = True, cmap = "YlOrRd")
       fig = hm.get_figure()
       fig.savefig(os.path.join(savepath, "Policy_Heatmap_" + name + ".pdf"), bbox_inches = "tight")
       plt.clf()
