@@ -12,9 +12,9 @@ num_users = 100
 num_items = num_suppliers
 num_attributes = 100
 attention_exp = 0
-pretraining = 100
-simulation_steps = 10
-steps_between_training = 1
+pretraining = 1000
+simulation_steps = 100
+steps_between_training = 10
 max_preference_per_attribute = 5
 train_between_steps = True
 num_items_per_iter = 2
@@ -31,7 +31,7 @@ discrete_actions = False
 
 learning_rate = 0.0003
 gamma = 0.9999
-training_steps = 50
+training_steps = 5000000
 log_interval = 10
 
 savepath = "Results/RLSuppliers"
