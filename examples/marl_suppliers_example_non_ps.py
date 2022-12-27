@@ -116,6 +116,9 @@ if num_suppliers == num_items and not price_into_observation and not attributes_
          name = "partner_" + str(p + 1)
       all_possible_states = sum([[np.array([[i, j],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)] for j in range(steps_between_training * num_users + 1)], [])
       policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten().reshape((steps_between_training * num_users + 1, steps_between_training * num_users + 1))
+
+      if discrete_actions:
+         policy = policy / 100
       for i in range(steps_between_training * num_users + 1):
          for j in range(steps_between_training * num_users + 1):
             if i > j:
@@ -128,6 +131,8 @@ if num_suppliers == num_items and not price_into_observation and not attributes_
 
       all_possible_states = [np.array([[i, steps_between_training * num_users],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)]
       policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten()
+      if discrete_actions:
+         policy = policy / 100
 
       plt.plot(np.arange(len(all_possible_states)), policy, color = "C0")
       plt.title("Policy representation for all possible states")
