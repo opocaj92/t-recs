@@ -8,4 +8,12 @@ from .popularity import PopularityRecommender
 from .random import RandomRecommender
 from .hybrid import HybridRecommender, MixedHybrid, EnsembleHybrid
 from .ideal import IdealRecommender
-from .priced import PricedBaseRecommender, PricedContentFiltering, PricedImplicitMF, PricedSocialFiltering, PricedPopularityRecommender, PricedRandomRecommender, PricedIdealRecommender
+from .priced import (
+	PricedBaseRecommender,
+	PricedContentFiltering,
+	PricedImplicitMF,
+	PricedSocialFiltering,
+	PricedPopularityRecommender,
+	PricedRandomRecommender,
+	PricedIdealRecommender
+)
