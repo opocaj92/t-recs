@@ -565,9 +565,9 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             num_new_items = self.num_items_per_iter
             num_recommended = 0
         else:
-            num_new_items = np.minimum(random_items_per_iter, self.newly_created_indices.shape[1])
+            num_new_items = np.minimum(random_items_per_iter, self.newly_created_indices.shape[1]) if self.random_newly_created else random_items_per_iter
             if vary_random_items_per_iter:
-                num_new_items = self.random_state.integers(0, np.minimum(random_items_per_iter, self.newly_created_indices.shape[1]) + 1)
+                num_new_items = self.random_state.integers(0, num_new_items + 1)
             num_recommended = self.num_items_per_iter - num_new_items
 
         # We are restricting to randomly recommend newly created items only if this is the case
