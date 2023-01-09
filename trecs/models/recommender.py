@@ -183,6 +183,8 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         system_state=None,
         score_fn=mo.inner_product,
         interleaving_fn=None,
+        forced_items=None,
+        forced_period=0,
         verbose=False,
         seed=None,
     ):
@@ -279,6 +281,10 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         # Keep track of newly created items in case we want to recommend those
         self.random_newly_created = random_newly_created if self.creators is not None else False
         self.newly_created_indices = np.tile(np.arange(num_items), (num_users, 1))
+
+        # Repeat indices of benefitted items for each user
+        self.forced_items = np.tile(np.array(forced_items), (num_users, 1))
+        self.forced_period = forced_period
 
         # initial metrics measurements (done at the end
         # when the rest of the initial state has been initialized)
@@ -570,6 +576,18 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
                 num_new_items = self.random_state.integers(0, num_new_items + 1)
             num_recommended = self.num_items_per_iter - num_new_items
 
+            # Keep account for forcefully shown items
+            if self.forced_period > 0 and self.forced_items is not None:
+                self.forced_items = self.forced_items[np.where(np.take_along_axis(self.indices, self.forced_items, 1) >= 0)]
+                self.forced_items = self.forced_items.reshape(self.num_users, -1)
+
+                if self.forced_items.shape[1] > num_recommended:
+                    raise ValueError(
+                        "Cannot forcefully show more items per iteration than the total number"
+                        " of remaining items shown per iteration"
+                    )
+                num_recommended -= self.forced_items.shape[1]
+
         # We are restricting to randomly recommend newly created items only if this is the case
         item_indices = self.indices
         random_item_indices = self.indices if (not self.random_newly_created or startup) else self.newly_created_indices
@@ -597,6 +615,11 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             items = items.astype(int)
         else:
             items = recommended
+
+
+        if not startup and self.forced_period > 0 and self.forced_items is not None:
+            self.forced_period -= 1
+            items = np.concatenate([self.forced_items, items], axis = 1)
 
         if self.is_verbose():
             self.log("System picked these items (cols) for each user (rows):\n" + str(items))
