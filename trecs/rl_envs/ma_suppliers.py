@@ -93,11 +93,12 @@ class parallel_env(ParallelEnv):
     self.discrete_actions = discrete_actions
     self.savepath = savepath
 
-    self.possible_agents = ["supplier_" + str(r) for r in range(self.num_suppliers)]
+    self.possible_agents = ["Supplier " + str(r) for r in range(self.num_suppliers)]
     self.agent_name_mapping = dict(zip(self.possible_agents, list(range(len(self.possible_agents)))))
     self.episodes_return = []
     self.episodes_interaction = []
     self.episodes_recommendation = []
+    self.cum_items = np.insert(np.cumsum(self.num_items), 0, 0)
 
   @functools.lru_cache(maxsize = None)
   def observation_space(self, agent):
@@ -120,8 +121,7 @@ class parallel_env(ParallelEnv):
     if self.discrete_actions:
       actions = {k: actions[k] / 100 for k in actions.keys()}
     epsilons = np.hstack(list(actions.values()))
-    nonrect_epsilons = self.__make_nonrect(epsilons)
-    self.actions_hist.append(nonrect_epsilons)
+    self.actions_hist.append(epsilons)
     prices = self.costs + epsilons
     self.rec.set_items_price_for_users(prices)
     if self.rs_knows_prices:
@@ -152,23 +152,19 @@ class parallel_env(ParallelEnv):
 
     period_interactions = np.sum(self.measures["interaction_histogram"][-self.steps_between_training:], axis = 0)
     self.episodes_interaction[-1] = self.episodes_interaction[-1] + period_interactions
-    nonrect_interactions = self.__make_nonrect(period_interactions)
     # REWARD IS HOW MUCH EACH SUPPLIER GAINED OVER THE COST
-    tmp_rewards = [np.sum(np.multiply(nonrect_interactions[i], epsilons[i])) for i in range(self.num_suppliers)]
+    tmp_rewards = [np.sum(np.multiply(period_interactions[self.cum_items[i]:self.cum_items[i + 1]], epsilons[self.cum_items[i]:self.cum_items[i + 1]])) for i in range(self.num_suppliers)]
 
     # OBSERVATION FOR EACH SUPPLIER IS THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR ITS ITEMS IN THE LAST PERIOD
     period_interactions = period_interactions / (self.num_users * self.steps_between_training)
-    nonrect_interactions = self.__make_nonrect(period_interactions)
     period_recommendations = np.sum(self.measures["recommendation_histogram"][-self.steps_between_training:], axis = 0)
     self.episodes_recommendation[-1] = self.episodes_recommendation[-1] + period_recommendations
     period_recommendations = period_recommendations / (self.num_users * self.steps_between_training)
-    nonrect_recommendations = self.__make_nonrect(period_recommendations)
-    tmp_observations = [np.concatenate([nonrect_interactions[i], nonrect_recommendations[i]]) for i in range(self.num_suppliers)]
+    tmp_observations = [np.concatenate([period_interactions[self.cum_items[i]:self.cum_items[i + 1]], period_recommendations[self.cum_items[i]:self.cum_items[i + 1]]]) for i in range(self.num_suppliers)]
     if self.price_into_observation:
-      nonrect_prices = self.__make_nonrect(prices)
-      tmp_observations = [np.concatenate([tmp_observations[i], nonrect_prices[i]]) for i in range(self.num_suppliers)]
+      tmp_observations = [np.concatenate([tmp_observations[i], prices[self.cum_items[i]:self.cum_items[i + 1]]]) for i in range(self.num_suppliers)]
     if self.attributes_into_observation:
-      tmp_observations = [np.concatenate([tmp_observations[i], self.nonrect_attr[i].flatten()]) for i in range(self.num_suppliers)]
+      tmp_observations = [np.concatenate([tmp_observations[i], self.attr[i]]) for i in range(self.num_suppliers)]
 
     rewards = {agent: tmp_rewards[i] for i, agent in enumerate(self.agents)}
     self.episodes_return[-1] = self.episodes_return[-1] + tmp_rewards
@@ -241,33 +237,32 @@ class parallel_env(ParallelEnv):
     self.measures["interaction_histogram"][0] = np.zeros(self.tot_items)
     self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
     self.actions_hist = []
+    self.episodes_interaction.append(np.zeros(self.tot_items))
+    self.episodes_recommendation.append(np.zeros(self.tot_items))
     self.episodes_return.append(np.zeros(len(self.possible_agents[:])))
-    self.episodes_interaction.append(np.zeros(len(self.possible_agents[:])))
-    self.episodes_recommendation.append(np.zeros(len(self.possible_agents[:])))
 
     self.agents = self.possible_agents[:]
     self.n_steps = 0
     tmp_observations = [np.zeros(2 * self.num_items[i]) for i in range(self.num_suppliers)]
     if self.price_into_observation:
-      nonrect_costs = self.__make_nonrect(self.costs)
-      tmp_observations = [np.concatenate([tmp_observations[i], nonrect_costs[i]]) for i in range(self.num_suppliers)]
+      tmp_observations = [np.concatenate([tmp_observations[i], self.costs[self.cum_items[i]:self.cum_items[i + 1]]]) for i in range(self.num_suppliers)]
     if self.attributes_into_observation:
-      self.nonrect_attr = self.__make_nonrect(items_attributes.T)
-      tmp_observations = [np.concatenate([tmp_observations[i], self.nonrect_attr[i].flatten()]) for i in range(self.num_suppliers)]
+      self.attr = [items_attributes.T[self.cum_items[i]:self.cum_items[i + 1]].flatten() for i in range(self.num_suppliers)]
+      tmp_observations = [np.concatenate([tmp_observations[i], self.attr[i]]) for i in range(self.num_suppliers)]
     return {agent: tmp_observations[i] for i, agent in enumerate(self.agents)}
 
   def render(self, mode = "simulation"):
-    colors = plt.get_cmap("YlGnBu")(np.linspace(0, 1, len(self.possible_agents)))
+    agents_colors = plt.get_cmap("tab20c")(np.linspace(0, 1, len(self.possible_agents)))
+    items_colors = plt.get_cmap("tab20c")(np.linspace(0, 1, self.tot_items))
 
     if mode == "training":
       episodes_return = np.array(self.episodes_return)
       for i, a in enumerate(self.possible_agents):
-        plt.plot(np.arange(episodes_return.shape[0]), episodes_return[:, i], color = colors[i], label = a)
+        plt.plot(np.arange(episodes_return.shape[0]), episodes_return[:, i], color = agents_colors[i], label = a)
       plt.title("RL return over training episodes")
       plt.xlabel("Timestep")
       plt.ylabel("Episode return")
-      if len(self.possible_agents) <= 5:
-        plt.legend()
+      plt.legend()
       plt.savefig(os.path.join(self.savepath, "Episode_Returns.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Episode_Returns.pkl"), "wb") as f:
@@ -277,15 +272,17 @@ class parallel_env(ParallelEnv):
       episodes_recommendation = np.array(self.episodes_recommendation)
       fig, ax1 = plt.subplots()
       ax2 = ax1.twinx()
+      count = 0
       for i, a in enumerate(self.possible_agents):
-        ax1.plot(np.arange(episodes_interaction.shape[0]), episodes_interaction[:, i], color = colors[i], label = a)
-        ax2.plot(np.arange(episodes_recommendation.shape[0]), episodes_recommendation[:, i], color = colors[i], linestyle = "dashed")
+        for j in range(self.num_items[i]):
+          ax1.plot(np.arange(episodes_interaction.shape[0]), episodes_interaction[:, i], color = items_colors[count], label = a + ((" Item " + str(i + 1)) if self.tot_items == self.num_suppliers else ""))
+          ax2.plot(np.arange(episodes_recommendation.shape[0]), episodes_recommendation[:, i], color = items_colors[count], linestyle = "dashed")
+          count += 1
       plt.title("RL observations over training episodes")
       ax1.set_xlabel("Timestep")
       ax1.set_ylabel("Episode interactions")
       ax2.set_ylabel("Episode recommendations")
-      if len(self.possible_agents) <= 5:
-        ax1.legend()
+      ax1.legend()
       plt.savefig(os.path.join(self.savepath, "Observations.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Obs_Interactions.pkl"), "wb") as f:
@@ -294,18 +291,19 @@ class parallel_env(ParallelEnv):
         pickle.dump(episodes_recommendation, f)
 
     else:
-      actions_hist = np.array(self.actions_hist, dtype = object)
-      nonrect_costs = self.__make_nonrect(self.costs)
+      tot_steps = self.pretraining + 1 + self.simulation_steps * self.steps_between_training
+      actions_hist = np.array(self.actions_hist)
+      count = 0
       for i, a in enumerate(self.possible_agents):
-        ah = nonrect_costs[i] + np.reshape(np.stack(actions_hist[:, i]), (self.simulation_steps, self.num_items[self.agent_name_mapping[a]]))
-        ah = np.concatenate([np.repeat(np.expand_dims(nonrect_costs[i], 0), self.pretraining + 1, axis = 0), np.repeat(ah, self.steps_between_training, axis = 0)], axis = 0)
-        plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(ah, axis = -1), color = colors[i], label = a)
-        #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(ah, axis = -1) - np.std(ah, axis = -1), np.mean(ah, axis = -1) + np.std(ah, axis = -1), color = colors[i], alpha = 0.3)
+        ah = self.costs[self.cum_items[i]:self.cum_items[i + 1]] + actions_hist[:, self.cum_items[i]:self.cum_items[i + 1]]
+        ah = np.concatenate([np.repeat(np.expand_dims(self.costs[self.cum_items[i]:self.cum_items[i + 1]], 0), self.pretraining + 1, axis = 0), np.repeat(ah, self.steps_between_training, axis = 0)], axis = 0)
+        for j in range(self.num_items[i]):
+          plt.plot(np.arange(tot_steps), ah[:, j], color = items_colors[count], label = a + ((" Item " + str(i + 1)) if self.tot_items == self.num_suppliers else ""))
+          count += 1
       plt.title("Suppliers prices over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel(r"Price (cost + $\epsilon_i$)")
-      if len(self.possible_agents) <= 5:
-        plt.legend()
+      plt.legend()
       plt.savefig(os.path.join(self.savepath, "Prices.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Prices.pkl"), "wb") as f:
@@ -316,18 +314,17 @@ class parallel_env(ParallelEnv):
       modified_ih = np.cumsum(interactions, axis = 0)
       modified_ih[0] = modified_ih[0] + 1e-32
       windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 >= 0 else modified_ih[t] for t in range(modified_ih.shape[0])])
-      percentages = np.reshape(windowed_modified_ih / np.sum(windowed_modified_ih, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
-      percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.pretraining + 1 + self.simulation_steps * self.steps_between_training)], dtype = object)
+      percentages = np.reshape(windowed_modified_ih / np.sum(windowed_modified_ih, axis = 1)[:, None], (tot_steps, self.tot_items))
+      count = 0
       for i, a in enumerate(self.possible_agents):
-        pctg = np.reshape(np.stack(percentages[:, i]), (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]]))
-        plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
-        #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
+        for j in range(self.num_items[i]):
+          plt.plot(np.arange(tot_steps), percentages[:, self.cum_items[i] + j], color = items_colors[count], label = a + ((" Item " + str(i + 1)) if self.tot_items == self.num_suppliers else ""))
+          count += 1
       plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
       plt.title("Suppliers interactions share over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel(r"Interactions share %")
-      if len(self.possible_agents) <= 5:
-        plt.legend()
+      plt.legend()
       plt.savefig(os.path.join(self.savepath, "Interactions.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Interactions.pkl"), "wb") as f:
@@ -338,42 +335,36 @@ class parallel_env(ParallelEnv):
       modified_rh = np.cumsum(recommendations, axis = 0)
       modified_rh[0] = modified_rh[0] + 1e-32
       windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 >= 0 else modified_rh[t] for t in range(modified_rh.shape[0])])
-      percentages = np.reshape(windowed_modified_rh / np.sum(windowed_modified_rh, axis = 1)[:, None], (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.tot_items))
-      percentages = np.array([self.__make_nonrect(percentages[i]) for i in range(self.pretraining + 1 + self.simulation_steps * self.steps_between_training)], dtype = object)
+      percentages = np.reshape(windowed_modified_rh / np.sum(windowed_modified_rh, axis = 1)[:, None], (tot_steps, self.tot_items))
+      count = 0
       for i, a in enumerate(self.possible_agents):
-        pctg = np.reshape(np.stack(percentages[:, i]), (self.pretraining + 1 + self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]]))
-        plt.plot(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1), color = colors[i], label = a)
-        #plt.fill_between(np.arange(self.pretraining + 1 + self.simulation_steps * self.steps_between_training), np.mean(pctg, axis = -1) - np.std(pctg, axis = -1), np.mean(pctg, axis = -1) + np.std(pctg, axis = -1), color = colors[i], alpha = 0.3)
+        for j in range(self.num_items[i]):
+          plt.plot(np.arange(tot_steps), percentages[:, self.cum_items[i] + j], color = items_colors[count], label = a + ((" Item " + str(i + 1)) if self.tot_items == self.num_suppliers else ""))
+          count += 1
       plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
       plt.title("Suppliers recommendations share over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel(r"Recommendations share %")
-      if len(self.possible_agents) <= 5:
-        plt.legend()
+      plt.legend()
       plt.savefig(os.path.join(self.savepath, "Recommendations.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Recommendations.pkl"), "wb") as f:
         pickle.dump(percentages, f)
 
       if self.vertically_differentiate:
-        avg_prices = np.hstack([np.mean(np.reshape(np.stack(self.actions_hist[:, self.agent_name_mapping[a]]), (self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]])), axis = 0) for a in self.possible_agents])
-        if self.tot_items != self.num_suppliers:
-          std_prices = np.hstack([np.std(np.reshape(np.stack(self.actions_hist[:, self.agent_name_mapping[a]]), (self.simulation_steps * self.steps_between_training, self.num_items[self.agent_name_mapping[a]])), axis = 0) for a in self.possible_agents])
-        else:
-          std_prices = None
-        plt.errorbar(self.costs, avg_prices, yerr = std_prices, fmt = "o", color = "C0", alpha = 0.5, capsize = 5, elinewidth = 1)
+        avg_prices = np.mean(actions_hist, axis = 0)
+        std_prices = np.std(actions_hist, axis = 0)
+        count = 0
+        for i, a in enumerate(self.possible_agents):
+          for j in range(self.num_items[i]):
+            plt.errorbar(self.costs[count], avg_prices[count], yerr = std_prices[count], fmt = "o", color = items_colors[count], alpha = 0.5, capsize = 5, elinewidth = 1, label = a + ((" Item " + str(i + 1)) if self.tot_items == self.num_suppliers else ""))
+            count += 1
         plt.title("Items quality-average price ratio")
         plt.xlabel("Initial cost (proportional to quality)")
         plt.ylabel(r"Average price")
+        plt.legend()
         plt.savefig(os.path.join(self.savepath, "Quality.pdf"), bbox_inches = "tight")
     plt.close("all")
 
   def close(self):
     del self.rec
-
-  def __make_nonrect(self, arr):
-    cum_items = np.insert(np.cumsum(self.num_items), 0, 0)
-    nonrect_arr = []
-    for i in range(self.num_suppliers):
-      nonrect_arr.append(arr[cum_items[i]:cum_items[i + 1]])
-    return nonrect_arr

@@ -5,7 +5,7 @@ import functools
 
 from trecs.models import BaseRecommender, PopularityRecommender, ContentFiltering, SocialFiltering, ImplicitMF, RandomRecommender, IdealRecommender
 from trecs.components import PredictedScores
-import trecs.matrix_ops as mo
+import trecs.matrix_ops as mo, scores_with_cost
 from trecs.validate import validate_user_item_inputs
 
 class PricedBaseRecommender(BaseRecommender):
@@ -39,15 +39,15 @@ class PricedBaseRecommender(BaseRecommender):
             num_users,
             num_items,
             num_items_per_iter,
-            creators,
-            probabilistic_recommendations,
-            measurements,
-            record_base_state,
-            system_state,
-            score_fn,
-            interleaving_fn,
-            verbose,
-            seed,
+            creators = creators,
+            probabilistic_recommendations = probabilistic_recommendations,
+            measurements = measurements,
+            record_base_state = record_base_state,
+            system_state = system_state,
+            score_fn = score_fn,
+            interleaving_fn = interleaving_fn,
+            verbose = verbose,
+            seed = seed,
         )
         self.set_items_price_for_users()
 
@@ -71,7 +71,7 @@ class PricedBaseRecommender(BaseRecommender):
                 raise TypeError("prices must the same number of items")
         else:
             prices = self.prices
-        fn_with_costs = functools.partial(mo.scores_with_cost, score_fn = self.score_fn, item_costs = prices)
+        fn_with_costs = functools.partial(scores_with_cost, score_fn = self.score_fn, item_costs = prices)
         self.users.set_score_function(fn_with_costs)
         self.users.compute_user_scores(self.actual_item_attributes)
 
