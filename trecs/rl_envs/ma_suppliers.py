@@ -16,7 +16,7 @@ def enableTqdm():
     sys.stderr = sys.__stderr__
 
 from trecs.components import Users, Items
-from trecs_plus.models import PricedPopularityRecommender, PricedContentFiltering, PricedSocialFiltering, PricedImplicitMF, PricedRandomRecommender, PricedIdealRecommender
+from trecs.models import PricedPopularityRecommender, PricedContentFiltering, PricedSocialFiltering, PricedImplicitMF, PricedRandomRecommender, PricedIdealRecommender
 from trecs.random import Generator
 from trecs.metrics import InteractionMeasurement, RecommendationMeasurement
 
@@ -96,6 +96,7 @@ class parallel_env(ParallelEnv):
     self.possible_agents = ["Supplier " + str(r) for r in range(self.num_suppliers)]
     self.agent_name_mapping = dict(zip(self.possible_agents, list(range(len(self.possible_agents)))))
     self.returns_history = []
+    self.scaled_returns_history = []
     self.interactions_history = []
     self.recommendations_history = []
     self.prices_history = []
@@ -154,7 +155,9 @@ class parallel_env(ParallelEnv):
 
     period_interactions = np.sum(self.measures["interaction_histogram"][-self.steps_between_training:], axis = 0)
     # REWARD IS HOW MUCH EACH SUPPLIER GAINED OVER THE COST
-    tmp_rewards = [np.sum(np.multiply(period_interactions[self.cum_items[i]:self.cum_items[i + 1]], epsilons[self.cum_items[i]:self.cum_items[i + 1]])) for i in range(self.num_suppliers)]
+    individual_items_reward = [np.multiply(period_interactions[self.cum_items[i]:self.cum_items[i + 1]], epsilons[self.cum_items[i]:self.cum_items[i + 1]]) for i in range(self.num_suppliers)]
+    tmp_rewards = [np.sum(individual_items_reward[i]) for i in range(self.num_suppliers)]
+    self.scaled_returns_history[-1] = self.scaled_returns_history[-1] + [np.sum(np.divide(individual_items_reward[i], self.scales[self.cum_items[i]:self.cum_items[i + 1]])) for i in range(self.num_suppliers)]
 
     # OBSERVATION FOR EACH SUPPLIER IS THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR ITS ITEMS IN THE LAST PERIOD
     period_interactions = period_interactions / (self.num_users * self.steps_between_training)
@@ -230,6 +233,9 @@ class parallel_env(ParallelEnv):
     self.rec.set_items_price_for_users(self.costs)
     self.rec.add_metrics(InteractionMeasurement(), RecommendationMeasurement())
 
+    self.scales = np.mean(self.rec.actual_user_item_scores, axis = 0)
+    self.scales = self.scales / np.max(self.scales)
+
     if self.pretraining > 0:
       blockTqdm()
       self.rec.startup_and_train(timesteps = self.pretraining, no_new_items = True)
@@ -240,6 +246,7 @@ class parallel_env(ParallelEnv):
     self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
     self.episode_actions = []
     self.returns_history.append(np.zeros(len(self.possible_agents[:])))
+    self.scaled_returns_history.append(np.zeros(len(self.possible_agents[:])))
     self.interactions_history.append(np.zeros(self.tot_items))
     self.recommendations_history.append(np.zeros(self.tot_items))
     self.prices_history.append(np.zeros(self.tot_items))
@@ -261,7 +268,10 @@ class parallel_env(ParallelEnv):
     if mode == "training":
       returns_history = np.array(self.returns_history)
       for i, a in enumerate(self.possible_agents):
-        plt.plot(np.arange(returns_history.shape[0]), returns_history[:, i], color = agents_colors[i], label = a)
+        if self.n_steps == 0:
+          plt.plot(np.arange(returns_history.shape[0] - 1), returns_history[:-1, i], color = agents_colors[i], label = a)
+        else:
+          plt.plot(np.arange(returns_history.shape[0]), returns_history[:, i], color = agents_colors[i], label = a)
       plt.title("RL return over training episodes")
       plt.xlabel("Episode")
       plt.ylabel("Return")
@@ -270,6 +280,22 @@ class parallel_env(ParallelEnv):
       plt.clf()
       with open(os.path.join(self.savepath, "History_Returns.pkl"), "wb") as f:
         pickle.dump(returns_history, f)
+
+      if not self.all_items_identical:
+        scaled_returns_history = np.array(self.scaled_returns_history)
+        for i, a in enumerate(self.possible_agents):
+          if self.n_steps == 0:
+            plt.plot(np.arange(scaled_returns_history.shape[0] - 1), scaled_returns_history[:-1, i], color = agents_colors[i], label = a)
+          else:
+            plt.plot(np.arange(scaled_returns_history.shape[0]), scaled_returns_history[:, i], color = agents_colors[i], label = a)
+        plt.title("RL scaledreturn over training episodes")
+        plt.xlabel("Episode")
+        plt.ylabel("Scaled Return")
+        plt.legend()
+        plt.savefig(os.path.join(self.savepath, "History_Scaled_Returns.pdf"), bbox_inches = "tight")
+        plt.clf()
+        with open(os.path.join(self.savepath, "History_Scaled_Returns.pkl"), "wb") as f:
+          pickle.dump(returns_history, f)
 
       interactions_history = np.array(self.interactions_history)
       recommendations_history = np.array(self.recommendations_history)

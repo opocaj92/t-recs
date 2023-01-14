@@ -14,7 +14,7 @@ def enableTqdm():
     sys.stderr = sys.__stderr__
 
 from trecs.components import Users, Items
-from trecs_plus.models import PricedPopularityRecommender, PricedContentFiltering, PricedSocialFiltering, PricedImplicitMF, PricedRandomRecommender, PricedIdealRecommender
+from trecs.models import PricedPopularityRecommender, PricedContentFiltering, PricedSocialFiltering, PricedImplicitMF, PricedRandomRecommender, PricedIdealRecommender
 from trecs.random import Generator
 from trecs.metrics import InteractionMeasurement, RecommendationMeasurement
 
@@ -86,6 +86,7 @@ class env(gym.Env):
     self.observation_space = Box(low = 0., high = 1., shape = (2 * self.num_items[0] + int(self.price_into_observation) * self.num_items[0] + int(self.attributes_into_observation) * (self.num_attributes + self.num_suppliers) * self.num_items[0],))
     self.action_space = MultiDiscrete([100 for _ in range(self.num_items[0])]) if self.discrete_actions else Box(low = 0., high = 1., shape = (self.num_items[0],))
     self.returns_history = []
+    self.scaled_returns_history = []
     self.interactions_history = []
     self.recommendations_history = []
     self.prices_history = []
@@ -129,7 +130,9 @@ class env(gym.Env):
 
     period_interactions = np.sum(self.measures["interaction_histogram"][-self.steps_between_training:], axis = 0)
     # REWARD IS HOW MUCH EACH SUPPLIER GAINED OVER THE COST
-    reward = np.sum(np.multiply(period_interactions[:self.num_items[0]], action))
+    individual_items_reward = np.multiply(period_interactions[:self.num_items[0]], action)
+    reward = np.sum(individual_items_reward)
+    self.scaled_returns_history[-1] += np.sum(np.divide(individual_items_reward, self.scales))
 
     # OBSERVATION FOR EACH SUPPLIER IS THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR ITS ITEMS IN THE LAST PERIOD
     period_interactions = period_interactions / (self.num_users * self.steps_between_training)
@@ -200,6 +203,9 @@ class env(gym.Env):
     self.rec.set_items_price_for_users(self.costs)
     self.rec.add_metrics(InteractionMeasurement(), RecommendationMeasurement())
 
+    self.scales = np.mean(self.rec.actual_user_item_scores, axis = 0)
+    self.scales = self.scales[:self.num_items[0]] / np.max(self.scales)
+
     if self.pretraining > 0:
       blockTqdm()
       self.rec.startup_and_train(timesteps = self.pretraining, no_new_items = True)
@@ -210,6 +216,7 @@ class env(gym.Env):
     self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
     self.episode_actions = []
     self.returns_history.append(0.)
+    self.scaled_returns_history.append(0.)
     self.interactions_history.append(np.zeros(self.num_items[0]))
     self.recommendations_history.append(np.zeros(self.num_items[0]))
     self.prices_history.append(np.zeros(self.num_items[0]))
@@ -230,7 +237,7 @@ class env(gym.Env):
 
     if mode == "training":
       if self.n_steps == 0:
-        plt.plot(np.arange(len(self.returns_history)) - 1, self.returns_history[:-1], color = colors[0], label = "Agent")
+        plt.plot(np.arange(len(self.returns_history) - 1), self.returns_history[:-1], color = colors[0], label = "Agent")
       else:
         plt.plot(np.arange(len(self.returns_history)), self.returns_history, color = colors[0], label = "Agent")
       plt.title("RL return over training episodes")
@@ -241,6 +248,20 @@ class env(gym.Env):
       plt.clf()
       with open(os.path.join(self.savepath, "History_Returns.pkl"), "wb") as f:
         pickle.dump(self.returns_history, f)
+
+      if not self.all_items_identical:
+        if self.n_steps == 0:
+          plt.plot(np.arange(len(self.scaled_returns_history) - 1), self.scaled_returns_history[:-1], color = colors[0], label = "Agent")
+        else:
+          plt.plot(np.arange(len(self.scaled_returns_history)), self.scaled_returns_history, color = colors[0], label = "Agent")
+        plt.title("RL scaled return over training episodes")
+        plt.xlabel("Episode")
+        plt.ylabel("Scaled Return")
+        plt.legend()
+        plt.savefig(os.path.join(self.savepath, "History_Scaled_Returns.pdf"), bbox_inches = "tight")
+        plt.clf()
+        with open(os.path.join(self.savepath, "History_Scaled_Returns.pkl"), "wb") as f:
+          pickle.dump(self.returns_history, f)
 
       interactions_history = np.array(self.interactions_history)
       recommendations_history = np.array(self.recommendations_history)
