@@ -5,7 +5,8 @@ import functools
 
 from trecs.models import BaseRecommender, PopularityRecommender, ContentFiltering, SocialFiltering, ImplicitMF, RandomRecommender, IdealRecommender
 from trecs.components import PredictedScores
-import trecs.matrix_ops as mo, scores_with_cost
+import trecs.matrix_ops as mo
+from trecs.matrix_ops import scores_with_cost
 from trecs.validate import validate_user_item_inputs
 
 class PricedBaseRecommender(BaseRecommender):
