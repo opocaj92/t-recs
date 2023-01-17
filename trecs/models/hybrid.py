@@ -203,6 +203,18 @@ class MixedHybrid(HybridRecommender):
         )
 
     def generate_recommendations(self, k = 1, item_indices = None):
+        if item_indices is not None:
+            if item_indices.size < self.num_users:
+                raise ValueError(
+                    "At least one user has interacted with all items!"
+                    "To avoid this problem, you may want to allow repeated items."
+                )
+            if k > item_indices.shape[1]:
+                raise ValueError(
+                    f"There are not enough items left to recommend {k} items to each user."
+                )
+        if k == 0:
+            return np.array([]).reshape((self.num_users, 0)).astype(int)
         cb_rec = self.content_based.generate_recommendations(k, item_indices)
         cf_rec = self.collaborative_filtering.generate_recommendations(k, item_indices)
         rec = []
