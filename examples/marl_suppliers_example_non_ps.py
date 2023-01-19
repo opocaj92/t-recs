@@ -4,6 +4,7 @@ import seaborn as sns
 import os
 
 from stable_baselines3 import PPO
+from pettingzoo.utils import aec_to_parallel
 from pantheonrl.common.agents import OnPolicyAgent
 from pantheonrl.envs.pettingzoo import PettingZooAECWrapper
 
@@ -97,23 +98,24 @@ ego.save(os.path.join(model_savepath, "ego_model"))
 env.base_env.render(mode = "training")
 
 print("---------------- SIMULATION ----------------")
+env = aec_to_parallel(env.base_env)
 obs = env.reset()
 env_done = False
 while not env_done:
-   action = ego.predict(obs, deterministic = True)[0]
-   obs, _, env_done, _ = env.step(action)
-env.base_env.render(mode = "simulation")
-env.base_env.close()
+   actions = {agent: ego.predict(obs[agent], deterministic=True)[0] if i == 0 else partners[i - 1].model.predict(obs[agent], deterministic=True)[0] for i, agent in enumerate(env.agents)}
+   obs, _, dones, _ = env.step(actions)
+   env_done = list(dones.values())[0]
+env.render(mode = "simulation")
 env.close()
 
 if num_suppliers == num_items and not price_into_observation and not attributes_into_observation:
-   for p in range(env.n_players):
-      if p == env.n_players - 1:
+   for p in range(num_suppliers):
+      if p == 0:
          model = ego
          name = "ego"
       else:
-         model = partners[p].model
-         name = "partner_" + str(p + 1)
+         model = partners[p - 1].model
+         name = "partner_" + str(p)
       all_possible_states = sum([[np.array([[i, j],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)] for j in range(steps_between_training * num_users + 1)], [])
       policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten().reshape((steps_between_training * num_users + 1, steps_between_training * num_users + 1))
 
@@ -125,6 +127,10 @@ if num_suppliers == num_items and not price_into_observation and not attributes_
                policy[i][j] = np.nan
 
       hm = sns.heatmap(policy, linewidths = 0.2, square = True, cmap = "YlOrRd")
+      hm.set_xticks(range(0, steps_between_training * num_users + 1, 10))
+      hm.set_xticklabels(f'{c:.1f}' for c in np.arange(0.0, 1.01, 0.1))
+      hm.set_yticks(range(0, steps_between_training * num_users + 1, 10))
+      hm.set_yticklabels(f'{c:.1f}' for c in np.arange(0.0, 1.01, 0.1))
       fig = hm.get_figure()
       fig.savefig(os.path.join(savepath, "Policy_Heatmap_" + name + ".pdf"), bbox_inches = "tight")
       plt.clf()
@@ -134,7 +140,7 @@ if num_suppliers == num_items and not price_into_observation and not attributes_
       if discrete_actions:
          policy = policy / 100
 
-      plt.plot(np.arange(len(all_possible_states)), policy, color = "C0")
+      plt.plot(np.arange(steps_between_training * num_users + 1) / (steps_between_training * num_users), policy, color = "C0")
       plt.title("Policy representation for all possible states")
       plt.xlabel("State")
       plt.ylabel(r"Price ($\epsilon_i$)")

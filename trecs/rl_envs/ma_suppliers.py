@@ -157,7 +157,7 @@ class parallel_env(ParallelEnv):
     # REWARD IS HOW MUCH EACH SUPPLIER GAINED OVER THE COST
     individual_items_reward = [np.multiply(period_interactions[self.cum_items[i]:self.cum_items[i + 1]], epsilons[self.cum_items[i]:self.cum_items[i + 1]]) for i in range(self.num_suppliers)]
     tmp_rewards = [np.sum(individual_items_reward[i]) for i in range(self.num_suppliers)]
-    self.scaled_returns_history[-1] = self.scaled_returns_history[-1] + [np.sum(np.divide(individual_items_reward[i], self.scales[self.cum_items[i]:self.cum_items[i + 1]])) for i in range(self.num_suppliers)]
+    self.scaled_returns_history[-1] = self.scaled_returns_history[-1] + [np.sum(np.divide(individual_items_reward[i], (self.scales[self.cum_items[i]:self.cum_items[i + 1]] + 1e-32))) for i in range(self.num_suppliers)]
 
     # OBSERVATION FOR EACH SUPPLIER IS THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR ITS ITEMS IN THE LAST PERIOD
     period_interactions = period_interactions / (self.num_users * self.steps_between_training)
@@ -234,7 +234,7 @@ class parallel_env(ParallelEnv):
     self.rec.add_metrics(InteractionMeasurement(), RecommendationMeasurement())
 
     self.scales = np.mean(self.rec.actual_user_item_scores, axis = 0)
-    self.scales = self.scales / np.max(self.scales)
+    self.scales = self.scales / (np.max(self.scales) + 1e-32)
 
     if self.pretraining > 0:
       blockTqdm()
@@ -312,7 +312,7 @@ class parallel_env(ParallelEnv):
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
-          ax1.plot(np.arange(interactions_history.shape[0]), interactions_history[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.tot_items == self.num_suppliers else ""))
+          ax1.plot(np.arange(interactions_history.shape[0]), interactions_history[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           ax2.plot(np.arange(recommendations_history.shape[0]), recommendations_history[:, count], color = items_colors[count], linestyle = "dashed")
           count += 1
       plt.title("Average RL observations over training episodes")
@@ -336,7 +336,7 @@ class parallel_env(ParallelEnv):
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
-          plt.plot(np.arange(prices_history.shape[0]), prices_history[:, count], color = items_colors[count], label = a + (("Item " + str(j + 1)) if self.num_items[0] > 1 else ""))
+          plt.plot(np.arange(prices_history.shape[0]), prices_history[:, count], color = items_colors[count], label = a + (("Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
       plt.title("Average RL price over training episodes")
       plt.xlabel("Episode")
@@ -355,7 +355,7 @@ class parallel_env(ParallelEnv):
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
-          plt.plot(np.arange(tot_steps), ah[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.tot_items == self.num_suppliers else ""))
+          plt.plot(np.arange(tot_steps), ah[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
       plt.title("Suppliers prices over simulation steps")
       plt.xlabel("Timestep")
@@ -375,7 +375,7 @@ class parallel_env(ParallelEnv):
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
-          plt.plot(np.arange(tot_steps), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.tot_items == self.num_suppliers else ""))
+          plt.plot(np.arange(tot_steps), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
       plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
       plt.title("Suppliers interactions share over simulation steps")
@@ -396,7 +396,7 @@ class parallel_env(ParallelEnv):
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
-          plt.plot(np.arange(tot_steps), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.tot_items == self.num_suppliers else ""))
+          plt.plot(np.arange(tot_steps), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
       plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
       plt.title("Suppliers recommendations share over simulation steps")

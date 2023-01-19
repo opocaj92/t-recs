@@ -100,6 +100,10 @@ if num_suppliers == num_items and not price_into_observation and not attributes_
             policy[i][j] = np.nan
 
    hm = sns.heatmap(policy, linewidths = 0.2, square = True, cmap = "YlOrRd")
+   hm.set_xticks(range(0, steps_between_training * num_users + 1, 10))
+   hm.set_xticklabels(f'{c:.1f}' for c in np.arange(0.0, 1.01, 0.1))
+   hm.set_yticks(range(0, steps_between_training * num_users + 1, 10))
+   hm.set_yticklabels(f'{c:.1f}' for c in np.arange(0.0, 1.01, 0.1))
    fig = hm.get_figure()
    fig.savefig(os.path.join(savepath, "Policy_Heatmap.pdf"), bbox_inches = "tight")
    plt.clf()
@@ -109,7 +113,7 @@ if num_suppliers == num_items and not price_into_observation and not attributes_
    if discrete_actions:
       policy = policy / 100
 
-   plt.plot(np.arange(len(all_possible_states)), policy, color = "C0")
+   plt.plot(np.arange(steps_between_training * num_users + 1) / (steps_between_training * num_users), policy, color = "C0")
    plt.title("Policy representation for all possible states")
    plt.xlabel("State")
    plt.ylabel(r"Price ($\epsilon_i$)")
