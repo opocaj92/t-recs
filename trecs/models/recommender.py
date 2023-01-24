@@ -283,7 +283,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         self.newly_created_indices = np.tile(np.arange(num_items), (num_users, 1))
 
         # Repeat indices of benefitted items for each user
-        self.forced_items = np.tile(np.array(forced_items), (num_users, 1))
+        self.forced_items = np.tile(np.array(forced_items), (num_users, 1)) if forced_items is not None else None
         self.forced_period = forced_period
 
         # initial metrics measurements (done at the end
