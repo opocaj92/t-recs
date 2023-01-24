@@ -339,7 +339,8 @@ class env(gym.Env):
       interactions[0] = np.zeros(self.tot_items)
       modified_ih = np.cumsum(interactions, axis = 0)
       modified_ih[0] = modified_ih[0] + 1e-32
-      windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 >= self.pretraining else modified_ih[t] for t in range(modified_ih.shape[0])])
+      modified_ih = np.array([modified_ih[t] - modified_ih[self.pretraining] if t > self.pretraining else modified_ih[t] for t in range(modified_ih.shape[0])])
+      windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 > self.pretraining else modified_ih[t] for t in range(modified_ih.shape[0])])
       percentages = windowed_modified_ih / np.sum(windowed_modified_ih, axis = 1, keepdims = True)
       for i in range(self.num_items[0]):
         plt.plot(np.arange(tot_steps), percentages[:, i], color = colors[i], label = ("Item " + str(i +1)) if self.num_items[0] > 1 else "Agent")
@@ -357,7 +358,8 @@ class env(gym.Env):
       recommendations[0] = np.zeros(self.tot_items)
       modified_rh = np.cumsum(recommendations, axis = 0)
       modified_rh[0] = modified_rh[0] + 1e-32
-      windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 >= self.pretraining else modified_rh[t] for t in range(modified_rh.shape[0])])
+      modified_rh = np.array([modified_rh[t] - modified_rh[self.pretraining] if t > self.pretraining else modified_rh[t] for t in range(modified_rh.shape[0])])
+      windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 > self.pretraining else modified_rh[t] for t in range(modified_rh.shape[0])])
       percentages = windowed_modified_rh / (np.sum(windowed_modified_rh, axis = 1, keepdims = True) / self.num_items_per_iter)
       for i in range(self.num_items[0]):
         plt.plot(np.arange(tot_steps), percentages[:, i], color = colors[i], label = ("Item " + str(i +1)) if self.num_items[0] > 1 else "Agent")
