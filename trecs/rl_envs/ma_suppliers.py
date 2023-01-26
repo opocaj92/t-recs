@@ -92,6 +92,7 @@ class parallel_env(ParallelEnv):
     self.rs_knows_prices = rs_knows_prices
     self.discrete_actions = discrete_actions
     self.savepath = savepath
+    os.makedirs(self.savepath, exist_ok = True)
 
     self.possible_agents = ["Supplier " + str(r) for r in range(self.num_suppliers)]
     self.agent_name_mapping = dict(zip(self.possible_agents, list(range(len(self.possible_agents)))))
@@ -348,62 +349,60 @@ class parallel_env(ParallelEnv):
         pickle.dump(self.prices_history, f)
 
     else:
-      tot_steps = self.pretraining + 1 + self.simulation_steps * self.steps_between_training
+      tot_steps = self.simulation_steps * self.steps_between_training
       episode_actions = np.array(self.episode_actions)
-      ah = self.costs + episode_actions
-      ah = np.concatenate([np.repeat(np.expand_dims(self.costs, 0), self.pretraining + 1, axis = 0), np.repeat(ah, self.steps_between_training, axis = 0)], axis = 0)
+      ah = np.repeat(self.costs + episode_actions, self.steps_between_training, axis = 0)
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
-          plt.plot(np.arange(tot_steps), ah[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+          plt.plot(np.arange(1, tot_steps + 1), ah[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
       plt.title("Suppliers prices over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel(r"Price (cost + $\epsilon_i$)")
+      plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
       plt.legend()
       plt.savefig(os.path.join(self.savepath, "Prices.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Prices.pkl"), "wb") as f:
         pickle.dump(episode_actions, f)
 
-      interactions = self.measures["interaction_histogram"]
+      interactions = self.measures["interaction_histogram"][-tot_steps:]
       interactions[0] = np.zeros(self.tot_items)
       modified_ih = np.cumsum(interactions, axis = 0)
       modified_ih[0] = modified_ih[0] + 1e-32
-      modified_ih = np.array([modified_ih[t] - modified_ih[self.pretraining] if t > self.pretraining else modified_ih[t] for t in range(modified_ih.shape[0])])
-      windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 > self.pretraining else modified_ih[t] for t in range(modified_ih.shape[0])])
+      windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 > 0 else modified_ih[t] for t in range(modified_ih.shape[0])])
       percentages = windowed_modified_ih / np.sum(windowed_modified_ih, axis = 1, keepdims = True)
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
-          plt.plot(np.arange(tot_steps), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+          plt.plot(np.arange(1, tot_steps + 1), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
-      plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
       plt.title("Suppliers interactions share over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel(r"Interactions share %")
+      plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
       plt.legend()
       plt.savefig(os.path.join(self.savepath, "Interactions.pdf"), bbox_inches = "tight")
       plt.clf()
       with open(os.path.join(self.savepath, "Interactions.pkl"), "wb") as f:
         pickle.dump(percentages, f)
 
-      recommendations = self.measures["recommendation_histogram"]
+      recommendations = self.measures["recommendation_histogram"][-tot_steps:]
       recommendations[0] = np.zeros(self.tot_items)
       modified_rh = np.cumsum(recommendations, axis = 0)
       modified_rh[0] = modified_rh[0] + 1e-32
-      modified_rh = np.array([modified_rh[t] - modified_rh[self.pretraining] if t > self.pretraining else modified_rh[t] for t in range(modified_rh.shape[0])])
-      windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 > self.pretraining else modified_rh[t] for t in range(modified_rh.shape[0])])
+      windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 > 0 else modified_rh[t] for t in range(modified_rh.shape[0])])
       percentages = windowed_modified_rh / (np.sum(windowed_modified_rh, axis = 1, keepdims = True) / self.num_items_per_iter)
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
-          plt.plot(np.arange(tot_steps), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+          plt.plot(np.arange(1, tot_steps + 1), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
-      plt.axvline(self.pretraining, color = "k", ls = ":", lw = .5)
       plt.title("Suppliers recommendations share over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel(r"Recommendations share %")
+      plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
       plt.legend()
       plt.savefig(os.path.join(self.savepath, "Recommendations.pdf"), bbox_inches = "tight")
       plt.clf()
@@ -426,4 +425,17 @@ class parallel_env(ParallelEnv):
     plt.close("all")
 
   def close(self):
-    del self.rec
+    debug_savepath = os.path.join(self.savepath, "debug")
+    os.makedirs(debug_savepath, exist_ok = True)
+    with open(os.path.join(debug_savepath, "predicted_user_profiles.pkl"), "wb") as f:
+      pickle.dump(self.rec.predicted_user_profiles, f)
+    with open(os.path.join(debug_savepath, "predicted_item_attributes.pkl"), "wb") as f:
+      pickle.dump(self.rec.predicted_item_attributes, f)
+    with open(os.path.join(debug_savepath, "actual_user_profiles.pkl"), "wb") as f:
+      pickle.dump(self.rec.actual_user_profiles, f)
+    with open(os.path.join(debug_savepath, "actual_item_attributes.pkl"), "wb") as f:
+      pickle.dump(self.rec.actual_item_attributes, f)
+    with open(os.path.join(debug_savepath, "actual_user_item_scores.pkl"), "wb") as f:
+      pickle.dump(self.rec.actual_user_item_scores, f)
+    with open(os.path.join(debug_savepath, "predicted_user_item_scoress.pkl"), "wb") as f:
+      pickle.dump(self.rec.predicted_user_item_scores, f)
