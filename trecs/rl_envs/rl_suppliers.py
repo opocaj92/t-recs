@@ -34,12 +34,12 @@ class env(gym.Env):
 
   def __init__(self,
                rec_type:str = "random_recommender",
-               num_suppliers:int = 20,
+               num_suppliers:int = 2,
                num_users:int = 100,
-               num_items:Union[int, list] = 500,
+               num_items:Union[int, list] = 2,
                num_attributes:int = 100,
                attention_exp:int = 0,
-               pretraining:int = 1000,
+               pretraining:int = 100,
                simulation_steps:int = 100,
                steps_between_training:int = 10,
                max_preference_per_attribute:int = 5,
@@ -52,6 +52,7 @@ class env(gym.Env):
                all_items_identical:bool = False,
                attributes_into_observation:bool = True,
                price_into_observation:bool = False,
+               quality_into_observation:bool = False,
                rs_knows_prices:bool = False,
                discrete_actions:bool = False,
                savepath:str = ""):
@@ -74,17 +75,17 @@ class env(gym.Env):
     self.repeated_items = repeated_items
     self.probabilistic_recommendations = probabilistic_recommendations
 
-    self.vertically_differentiate = vertically_differentiate
-    self.costs = np.random.random(self.tot_items) if self.vertically_differentiate else np.zeros(self.tot_items, dtype = float)
     self.all_items_identical = all_items_identical
+    self.vertically_differentiate = vertically_differentiate and not self.all_items_identical
     self.attributes_into_observation = attributes_into_observation and not self.all_items_identical
     self.price_into_observation = price_into_observation
+    self.quality_into_observation = quality_into_observation and not self.all_items_identical
     self.rs_knows_prices = rs_knows_prices
     self.discrete_actions = discrete_actions
     self.savepath = savepath
     os.makedirs(self.savepath, exist_ok = True)
 
-    self.observation_space = Box(low = 0., high = 1., shape = (2 * self.num_items[0] + int(self.price_into_observation) * self.num_items[0] + int(self.attributes_into_observation) * (self.num_attributes + self.num_suppliers) * self.num_items[0],))
+    self.observation_space = Box(low = 0., high = 1., shape = (2 * self.num_items[0] + int(self.price_into_observation) * self.num_items[0] + int(self.quality_into_observation) * self.num_items[0] + int(self.attributes_into_observation) * (self.num_attributes + self.num_suppliers) * self.num_items[0],))
     self.action_space = MultiDiscrete([100 for _ in range(self.num_items[0])]) if self.discrete_actions else Box(low = 0., high = 1., shape = (self.num_items[0],))
     self.returns_history = []
     self.scaled_returns_history = []
@@ -126,16 +127,11 @@ class env(gym.Env):
       )
 
     self.measures = self.rec.get_measurements()
-    self.measures["interaction_histogram"][0] = np.zeros(self.tot_items)
-    self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
-
     period_interactions = np.sum(self.measures["interaction_histogram"][-self.steps_between_training:], axis = 0)
-    # REWARD IS HOW MUCH EACH SUPPLIER GAINED OVER THE COST
     individual_items_reward = np.multiply(period_interactions[:self.num_items[0]], action)
     reward = np.sum(individual_items_reward)
     self.scaled_returns_history[-1] += np.sum(np.divide(individual_items_reward, self.scales))
 
-    # OBSERVATION FOR EACH SUPPLIER IS THE NUMBER OF RECOMMENDATIONS AND INTERACTIONS FOR ITS ITEMS IN THE LAST PERIOD
     period_interactions = period_interactions / (self.num_users * self.steps_between_training)
     self.interactions_history[-1] = self.interactions_history[-1] + period_interactions[:self.num_items[0]]
     period_recommendations = np.sum(self.measures["recommendation_histogram"][-self.steps_between_training:], axis = 0)
@@ -144,6 +140,8 @@ class env(gym.Env):
     obs = np.concatenate([period_interactions[:self.num_items[0]], period_recommendations[:self.num_items[0]]])
     if self.price_into_observation:
       obs = np.concatenate([obs, prices[:self.num_items[0]]])
+    if self.quality_into_observation:
+      obs = np.concatenate([obs, self.qualities])
     if self.attributes_into_observation:
       obs = np.concatenate([obs, self.attr])
 
@@ -155,7 +153,6 @@ class env(gym.Env):
     return obs, reward, done, info
 
   def reset(self):
-    # IF WE WANT MULTIPLE ITEMS, WE GIVE DIFFERENT SCORES TO FIRMS TOO
     firm_scores = np.zeros((self.num_users, self.num_suppliers)) if self.tot_items == self.num_suppliers else np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_suppliers))
     self.actual_user_representation = Users(
       actual_user_profiles = np.concatenate([np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_attributes)), firm_scores], axis = 1),
@@ -164,10 +161,9 @@ class env(gym.Env):
       attention_exp = self.attention_exp
     )
 
-    # IF WE WANT VERTICAL DIFFERENTIATION, NUMBER OF 1s DEPENDS ON THE COST
+    self.costs = np.random.random(self.tot_items) if self.vertically_differentiate else np.zeros(self.tot_items, dtype = float)
     if self.vertically_differentiate:
       items_attributes = np.array([Generator().binomial(n = 1, p = self.costs[i], size = (self.num_attributes)) for i in range(self.tot_items)]).T
-    # IF WE WANT ITEMS TO BE ONLY HORIZONTALLY DIFFERENTIATED, NUMBER OF 1s IS THE SAME
     else:
       num_ones = np.random.randint(self.num_attributes)
       base_vector = np.concatenate([np.ones(num_ones), np.zeros(self.num_attributes - num_ones)])
@@ -177,14 +173,11 @@ class env(gym.Env):
         shared_attr = np.random.permutation(base_vector)
         items_attributes = np.array([shared_attr for _ in range(self.tot_items)]).T
     items_attributes = np.concatenate([items_attributes, np.repeat(np.eye(self.num_suppliers), self.num_items, axis = 1)], axis = 0)
-    # WE HAD A ONE-HOT ENCODING FOR THE SUPPLIER ID
     self.actual_item_representation = Items(
       item_attributes = items_attributes,
       size = (self.num_attributes + self.num_suppliers, self.tot_items)
     )
 
-    # RS INITIALIZATION AND INITIAL TRAINING
-    # WE START WITH PRICE-TAKER SUPPLIERS: p=c
     if self.rec_type == "content_based" or self.rec_type == "ensemble_hybrid" or self.rec_type == "mixed_hybrid":
       self.rec = models[self.rec_type](num_attributes = self.num_attributes + self.num_suppliers,
                                        actual_user_representation = self.actual_user_representation,
@@ -206,6 +199,8 @@ class env(gym.Env):
 
     self.scales = np.mean(self.rec.actual_user_item_scores, axis = 0)
     self.scales = self.scales[:self.num_items[0]] / np.max(self.scales)
+    self.qualities = np.sum(items_attributes, axis = 1)
+    self.qualities =  self.qualities[:self.num_items[0]] / (np.max(self.qualities) + 1e-32)
 
     if self.pretraining > 0:
       blockTqdm()
@@ -213,8 +208,6 @@ class env(gym.Env):
       enableTqdm()
 
     self.measures = self.rec.get_measurements()
-    self.measures["interaction_histogram"][0] = np.zeros(self.tot_items)
-    self.measures["recommendation_histogram"][0] = np.zeros(self.tot_items)
     self.episode_actions = []
     self.returns_history.append(0.)
     self.scaled_returns_history.append(0.)
@@ -228,6 +221,8 @@ class env(gym.Env):
     obs = np.zeros(2 * self.num_items[0])
     if self.price_into_observation:
       obs = np.concatenate([obs, self.costs[:self.num_items[0]]])
+    if self.quality_into_observation:
+      obs = np.concatenate([obs, self.qualities])
     if self.attributes_into_observation:
       self.attr = items_attributes.T[:self.num_items[0]].flatten()
       obs = np.concatenate([obs, self.attr])
@@ -336,9 +331,7 @@ class env(gym.Env):
       with open(os.path.join(self.savepath, "Prices.pkl"), "wb") as f:
         pickle.dump(self.episode_actions, f)
 
-      interactions = self.measures["interaction_histogram"]
-      interactions[0] = np.zeros(self.tot_items)
-      interactions = interactions[-tot_steps:]
+      interactions = self.measures["interaction_histogram"][-tot_steps:]
       modified_ih = np.cumsum(interactions, axis = 0)
       modified_ih[0] = modified_ih[0] + 1e-32
       windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 > 0 else modified_ih[t] for t in range(modified_ih.shape[0])])
@@ -355,9 +348,7 @@ class env(gym.Env):
       with open(os.path.join(self.savepath, "Interactions.pkl"), "wb") as f:
         pickle.dump(percentages, f)
 
-      recommendations = self.measures["recommendation_histogram"]
-      recommendations[0] = np.zeros(self.tot_items)
-      recommendations = recommendations[-tot_steps:]
+      recommendations = self.measures["recommendation_histogram"][-tot_steps:]
       modified_rh = np.cumsum(recommendations, axis = 0)
       modified_rh[0] = modified_rh[0] + 1e-32
       windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 > 0 else modified_rh[t] for t in range(modified_rh.shape[0])])
