@@ -325,7 +325,7 @@ class env(gym.Env):
         if i < self.num_items[0]:
           plt.plot(np.arange(1, tot_steps + 1), ah[:, i], color = colors[i], label = ("Item " + str(i +1)) if self.num_items[0] > 1 else "Agent")
         else:
-          plt.hline(self.other_policies[i - self.num_items[0]], xmin = 1, xmax = tot_steps,  color = colors[i])
+          plt.hlines(self.other_policies[i - self.num_items[0]], xmin = 1, xmax = tot_steps,  color = colors[i])
       plt.title("Suppliers prices over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel(r"Price (cost + $\epsilon_i$)")
@@ -336,8 +336,9 @@ class env(gym.Env):
       with open(os.path.join(self.savepath, "Prices.pkl"), "wb") as f:
         pickle.dump(self.episode_actions, f)
 
-      interactions = self.measures["interaction_histogram"][-tot_steps:]
+      interactions = self.measures["interaction_histogram"]
       interactions[0] = np.zeros(self.tot_items)
+      interactions = interactions[-tot_steps:]
       modified_ih = np.cumsum(interactions, axis = 0)
       modified_ih[0] = modified_ih[0] + 1e-32
       windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 > 0 else modified_ih[t] for t in range(modified_ih.shape[0])])
@@ -354,8 +355,9 @@ class env(gym.Env):
       with open(os.path.join(self.savepath, "Interactions.pkl"), "wb") as f:
         pickle.dump(percentages, f)
 
-      recommendations = self.measures["recommendation_histogram"][-tot_steps:]
+      recommendations = self.measures["recommendation_histogram"]
       recommendations[0] = np.zeros(self.tot_items)
+      recommendations = recommendations[-tot_steps:]
       modified_rh = np.cumsum(recommendations, axis = 0)
       modified_rh[0] = modified_rh[0] + 1e-32
       windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 > 0 else modified_rh[t] for t in range(modified_rh.shape[0])])

@@ -367,8 +367,9 @@ class parallel_env(ParallelEnv):
       with open(os.path.join(self.savepath, "Prices.pkl"), "wb") as f:
         pickle.dump(episode_actions, f)
 
-      interactions = self.measures["interaction_histogram"][-tot_steps:]
+      interactions = self.measures["interaction_histogram"]
       interactions[0] = np.zeros(self.tot_items)
+      interactions = interactions[-tot_steps:]
       modified_ih = np.cumsum(interactions, axis = 0)
       modified_ih[0] = modified_ih[0] + 1e-32
       windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 > 0 else modified_ih[t] for t in range(modified_ih.shape[0])])
@@ -388,8 +389,9 @@ class parallel_env(ParallelEnv):
       with open(os.path.join(self.savepath, "Interactions.pkl"), "wb") as f:
         pickle.dump(percentages, f)
 
-      recommendations = self.measures["recommendation_histogram"][-tot_steps:]
+      recommendations = self.measures["recommendation_histogram"]
       recommendations[0] = np.zeros(self.tot_items)
+      recommendations = recommendations[-tot_steps:]
       modified_rh = np.cumsum(recommendations, axis = 0)
       modified_rh[0] = modified_rh[0] + 1e-32
       windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 > 0 else modified_rh[t] for t in range(modified_rh.shape[0])])
