@@ -54,6 +54,7 @@ class env(gym.Env):
                price_into_observation:bool = False,
                quality_into_observation:bool = False,
                rs_knows_prices:bool = False,
+               users_know_prices:bool = True,
                discrete_actions:bool = False,
                savepath:str = ""):
     super(env).__init__()
@@ -81,6 +82,7 @@ class env(gym.Env):
     self.price_into_observation = price_into_observation
     self.quality_into_observation = quality_into_observation and not self.all_items_identical
     self.rs_knows_prices = rs_knows_prices
+    self.users_know_prices = users_know_prices
     self.discrete_actions = discrete_actions
     self.savepath = savepath
     os.makedirs(self.savepath, exist_ok = True)
@@ -103,7 +105,8 @@ class env(gym.Env):
     self.prices_history[-1] = self.prices_history[-1] + action
     self.others_history[-1] = self.others_history[-1] + self.other_policies
     prices = self.costs + epsilons
-    self.rec.set_items_price_for_users(prices)
+    if self.users_know_prices:
+      self.rec.set_items_price_for_users(prices)
     if self.rs_knows_prices:
       self.rec.set_items_price(prices)
 
@@ -194,13 +197,14 @@ class env(gym.Env):
                                        num_items_per_iter = self.num_items_per_iter,
                                        probabilistic_recommendations = self.probabilistic_recommendations if self.rec_type != "random_recommender" else False
                                        )
-    self.rec.set_items_price_for_users(self.costs)
+    if self.users_know_prices:
+      self.rec.set_items_price_for_users(self.costs)
     self.rec.add_metrics(InteractionMeasurement(), RecommendationMeasurement())
 
     self.scales = np.mean(self.rec.actual_user_item_scores, axis = 0)
     self.scales = self.scales[:self.num_items[0]] / np.max(self.scales)
     self.qualities = np.sum(items_attributes, axis = 1)
-    self.qualities =  self.qualities[:self.num_items[0]] / (np.max(self.qualities) + 1e-32)
+    self.qualities =  self.qualities[:self.num_items[0]] / self.num_attributes
 
     if self.pretraining > 0:
       blockTqdm()

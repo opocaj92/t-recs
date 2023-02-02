@@ -6,8 +6,8 @@ import functools
 from trecs.models import BaseRecommender, PopularityRecommender, ContentFiltering, SocialFiltering, ImplicitMF, RandomRecommender, IdealRecommender
 from trecs.components import PredictedScores
 import trecs.matrix_ops as mo
-from trecs.matrix_ops import scores_with_cost
 from trecs.validate import validate_user_item_inputs
+from trecs.matrix_ops import scores_with_cost
 
 class PricedBaseRecommender(BaseRecommender):
     def __init__(
@@ -50,7 +50,7 @@ class PricedBaseRecommender(BaseRecommender):
             verbose = verbose,
             seed = seed,
         )
-        self.set_items_price_for_users()
+        # self.set_items_price_for_users()
 
     def set_items_price(self, prices = None):
         if prices is not None:
@@ -72,16 +72,14 @@ class PricedBaseRecommender(BaseRecommender):
                 raise TypeError("prices must the same number of items")
         else:
             prices = self.prices
+
         fn_with_costs = functools.partial(scores_with_cost, score_fn = self.score_fn, item_costs = prices)
         self.users.set_score_function(fn_with_costs)
         self.users.compute_user_scores(self.actual_item_attributes)
 
     def train(self):
         super().train()
-        self.predicted_scores.value = self.__normalize(self.predicted_user_item_scores) - self.prices
-
-    def __normalize(self, a):
-        return (a - np.min(a, axis = 1, keepdims = True)) / (np.ptp(a, axis = 1, keepdims = True) + 1e-32)
+        self.predicted_scores.value = (self.predicted_user_item_scores / (np.max(self.predicted_user_item_scores) + 1e-32)) - self.prices
 
 class PricedContentFiltering(ContentFiltering, PricedBaseRecommender):
     def __init__(
@@ -303,4 +301,4 @@ class PricedIdealRecommender(IdealRecommender, PricedBaseRecommender):
                 self.predicted_scores = PredictedScores(self.actual_user_item_scores)
             else:
                 self.predicted_scores.value = self.actual_user_item_scores
-            self.predicted_scores.value = self.__normalize(self.predicted_user_item_scores) - self.prices
+            self.predicted_scores.value = (self.predicted_user_item_scores / (np.max(self.predicted_user_item_scores) + 1e-32)) - self.prices

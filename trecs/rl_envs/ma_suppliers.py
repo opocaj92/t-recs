@@ -64,6 +64,7 @@ class parallel_env(ParallelEnv):
                price_into_observation:bool = False,
                quality_into_observation:bool = False,
                rs_knows_prices:bool = False,
+               users_know_prices:bool = True,
                discrete_actions:bool = False,
                savepath:str = ""):
     super(parallel_env).__init__()
@@ -92,6 +93,7 @@ class parallel_env(ParallelEnv):
     self.price_into_observation = price_into_observation
     self.quality_into_observation = quality_into_observation and not self.all_items_identical
     self.rs_knows_prices = rs_knows_prices
+    self.users_know_prices = users_know_prices
     self.discrete_actions = discrete_actions
     self.savepath = savepath
     os.makedirs(self.savepath, exist_ok = True)
@@ -126,7 +128,9 @@ class parallel_env(ParallelEnv):
     self.episode_actions.append(epsilons)
     self.prices_history[-1] = self.prices_history[-1] + epsilons
     prices = self.costs + epsilons
-    self.rec.set_items_price_for_users(prices)
+
+    if self.users_know_prices:
+      self.rec.set_items_price_for_users(prices)
     if self.rs_knows_prices:
       self.rec.set_items_price(prices)
 
@@ -222,13 +226,14 @@ class parallel_env(ParallelEnv):
                                        num_items_per_iter = self.num_items_per_iter,
                                        probabilistic_recommendations = self.probabilistic_recommendations if self.rec_type != "random_recommender" else False
                                        )
-    self.rec.set_items_price_for_users(self.costs)
+    if self.users_know_prices:
+      self.rec.set_items_price_for_users(self.costs)
     self.rec.add_metrics(InteractionMeasurement(), RecommendationMeasurement())
 
     self.scales = np.mean(self.rec.actual_user_item_scores, axis = 0)
     self.scales = self.scales / (np.max(self.scales) + 1e-32)
     self.qualities = np.sum(items_attributes, axis = 1)
-    self.qualities =  self.qualities / (np.max(self.qualities) + 1e-32)
+    self.qualities =  self.qualities / self.num_attributes
 
     if self.pretraining > 0:
       blockTqdm()
@@ -248,7 +253,7 @@ class parallel_env(ParallelEnv):
     tmp_observations = [np.zeros(2 * self.num_items[i]) for i in range(self.num_suppliers)]
     if self.price_into_observation:
       tmp_observations = [np.concatenate([tmp_observations[i], self.costs[self.cum_items[i]:self.cum_items[i + 1]]]) for i in range(self.num_suppliers)]
-    if self.qualitiy_into_observation:
+    if self.quality_into_observation:
       tmp_observations = [np.concatenate([tmp_observations[i], self.qualities[self.cum_items[i]:self.cum_items[i + 1]]]) for i in range(self.num_suppliers)]
     if self.attributes_into_observation:
       self.attr = [items_attributes.T[self.cum_items[i]:self.cum_items[i + 1]].flatten() for i in range(self.num_suppliers)]
