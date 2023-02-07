@@ -200,8 +200,9 @@ class ContentFiltering(BaseRecommender):
                 the item that the user has interacted with.
 
         """
+        interactions_idx = np.argwhere(interactions != -1).flatten()
         sparse_interactions = sp.csr_matrix(
-            (np.ones(interactions.shape), (self.users.user_vector, interactions)),
+            (np.ones(interactions_idx.shape), (self.users.user_vector[interactions_idx], interactions[interactions_idx])),
             self.all_interactions.shape,
         )
         self.all_interactions = self.all_interactions + sparse_interactions

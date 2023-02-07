@@ -369,6 +369,7 @@ class Users(BaseComponent):  # pylint: disable=too-many-ancestors
         actual_user_profiles=None,
         actual_user_scores=None,
         interact_with_items=None,
+        individual_rationality=False,
         size=None,
         num_users=None,
         drift=0,
@@ -409,6 +410,7 @@ class Users(BaseComponent):  # pylint: disable=too-many-ancestors
         )[0]
         self.actual_user_profiles = ActualUserProfiles(actual_user_profiles)
         self.interact_with_items = interact_with_items
+        self.individual_rationality = individual_rationality
         self.drift = drift
         self.attention_exp = attention_exp
         if not callable(score_fn):
@@ -567,11 +569,16 @@ class Users(BaseComponent):  # pylint: disable=too-many-ancestors
             # scores must be set back later to non-infinite values
             prev_interacted_scores = self.actual_user_scores.get_item_scores(self.user_interactions)
             # "remove" items that have been interacted with by setting scores to negative infinity
-            self.actual_user_scores.set_item_scores_to_value(self.user_interactions, float("-inf"))
+            tmp_scores = np.zeros_like(prev_interacted_scores) * float("-inf")
+            tmp_scores[self.user_interactions == -1] = prev_interacted_scores[self.user_interactions == -1]
+            self.actual_user_scores.set_item_scores_to_value(self.user_interactions, tmp_scores)
         rec_item_scores = self.actual_user_scores.get_item_scores(items_shown)
         rec_item_scores = self.attention_transform(rec_item_scores)
         sorted_user_preferences = mo.argmax(rec_item_scores, axis=1)
         interactions = items_shown[self.user_vector, sorted_user_preferences]
+        if self.individual_rationality:
+            # if users are individually rational, they would select nothing rather than a negatively scored item
+            interactions[np.where(self.actual_user_scores.get_item_scores(np.expand_dims(interactions, 1)).flatten() < 0)] = -1
         # logging information if requested
         if self.is_verbose():
             self.log(f"User scores for given items are:\n{str(rec_item_scores)}")

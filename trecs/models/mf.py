@@ -205,7 +205,8 @@ class ImplicitMF(BaseRecommender):
         """
         At each training timestep, we keep track of the user/item interactions.
         """
-        user_item_ids = tuple(zip(self.users.user_vector, interactions))
+        interactions_idx = np.argwhere(interactions != -1).flatten()
+        user_item_ids = tuple(zip(self.users.user_vector[interactions_idx], interactions[interactions_idx]))
         interaction_df = pd.DataFrame(user_item_ids, columns=["user", "item"])
         self.all_interactions = self.all_interactions.append(interaction_df, ignore_index=True)
 

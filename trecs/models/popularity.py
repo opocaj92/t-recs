@@ -158,7 +158,8 @@ class PopularityRecommender(BaseRecommender):
 
     def _update_internal_state(self, interactions):
         histogram = np.zeros(self.num_items, dtype=int)
-        np.add.at(histogram, interactions, 1)
+        interactions_idx = np.argwhere(interactions != -1).flatten()
+        np.add.at(histogram, interactions[interactions_idx], 1)
         self.items_hat.value += histogram
 
     def process_new_items(self, new_items):
