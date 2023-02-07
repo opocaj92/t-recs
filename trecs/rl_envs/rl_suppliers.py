@@ -38,7 +38,8 @@ class env(gym.Env):
                num_users:int = 100,
                num_items:Union[int, list] = 2,
                num_attributes:int = 100,
-               attention_exp:int = 0,
+               attention_exp:float = 0.,
+               drift:float = 0.,
                pretraining:int = 100,
                simulation_steps:int = 100,
                steps_between_training:int = 10,
@@ -55,6 +56,7 @@ class env(gym.Env):
                quality_into_observation:bool = False,
                rs_knows_prices:bool = False,
                users_know_prices:bool = True,
+               individual_rationality:bool = False,
                discrete_actions:bool = False,
                savepath:str = ""):
     super(env).__init__()
@@ -66,6 +68,7 @@ class env(gym.Env):
     self.num_users = num_users
     self.num_attributes = num_attributes
     self.attention_exp = attention_exp
+    self.drift = drift
     self.pretraining = pretraining
     self.simulation_steps = simulation_steps
     self.steps_between_training = steps_between_training
@@ -83,6 +86,7 @@ class env(gym.Env):
     self.quality_into_observation = quality_into_observation and not self.all_items_identical
     self.rs_knows_prices = rs_knows_prices
     self.users_know_prices = users_know_prices
+    self.individual_rationality = individual_rationality
     self.discrete_actions = discrete_actions
     self.savepath = savepath
     os.makedirs(self.savepath, exist_ok = True)
@@ -161,7 +165,9 @@ class env(gym.Env):
       actual_user_profiles = np.concatenate([np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_attributes)), firm_scores], axis = 1),
       num_users = self.num_users,
       size = (self.num_users, self.num_attributes + self.num_suppliers),
-      attention_exp = self.attention_exp
+      attention_exp = self.attention_exp,
+      drift = self.drift,
+      individual_rationality = self.individual_rationality
     )
 
     self.costs = np.random.random(self.tot_items) if self.vertically_differentiate else np.zeros(self.tot_items, dtype = float)
