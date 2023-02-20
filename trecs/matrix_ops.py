@@ -555,7 +555,7 @@ def slerp(mat1, mat2, perc=0.05):
         mat2 = mat2[np.newaxis, :]
     mat1_length = np.linalg.norm(mat1, axis=1)[:, np.newaxis]
     mat2_length = np.linalg.norm(mat2, axis=1)[:, np.newaxis]
-    mat1_norm, mat2_norm = mat1 / mat1_length, mat2 / mat2_length
+    mat1_norm, mat2_norm = mat1 / (mat1_length + 1e-32), mat2 / (mat2_length + 1e-32)
     row_dot_product = (mat1_norm * mat2_norm).sum(axis=1)
     # dot every user profile with its corresponding item attributes
     omega = np.arccos(np.clip(row_dot_product, -1., 1.)) # THE DOT PRODUCT CAN BE ROUNDED OVER THE MARGINS
