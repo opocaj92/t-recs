@@ -183,6 +183,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         system_state=None,
         score_fn=mo.inner_product,
         interleaving_fn=None,
+        num_forced_items=0,
         forced_items=None,
         forced_period=0,
         verbose=False,
@@ -283,6 +284,11 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         self.newly_created_indices = np.tile(np.arange(num_items), (num_users, 1))
 
         # Repeat indices of benefitted items for each user
+        self.num_forced_items = num_forced_items
+        if self.num_forced_items > self.num_items_per_iter:
+            raise ValueError("You cannot force more items than the number of recommendations")
+        if (forced_items is not None and self.num_forced_items > forced_items.shape[0]) or (forced_items is None and self.num_forced_items != 0):
+            raise ValueError("There must be at least num_forced_items indices of items to recommend")
         self.forced_items = np.tile(np.array(forced_items), (num_users, 1)) if forced_items is not None else None
         self.forced_period = forced_period
 
@@ -578,15 +584,13 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
 
             # Keep account for forcefully shown items
             if self.forced_period > 0 and self.forced_items is not None:
-                self.forced_items = self.forced_items[np.where(np.take_along_axis(self.indices, self.forced_items, 1) >= 0)]
-                self.forced_items = self.forced_items.reshape(self.num_users, -1)
+                if not repeated_items:
+                    self.forced_items = self.forced_items[np.where(np.take_along_axis(self.indices, self.forced_items, 1) >= 0)]
+                    self.forced_items = self.forced_items.reshape(self.num_users, -1)
 
-                if self.forced_items.shape[1] > num_recommended:
-                    raise ValueError(
-                        "Cannot forcefully show more items per iteration than the total number"
-                        " of remaining items shown per iteration"
-                    )
-                num_recommended -= self.forced_items.shape[1]
+                    if self.forced_items.shape[1] < self.num_forced_items:
+                        raise ValueError("Not enough items to forcefully show")
+                num_recommended -= self.num_forced_items
 
         # We are restricting to randomly recommend newly created items only if this is the case
         item_indices = self.indices
@@ -619,7 +623,8 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
 
         if not startup and self.forced_period > 0 and self.forced_items is not None:
             self.forced_period -= 1
-            items = np.concatenate([self.forced_items, items], axis = 1)
+            idx = np.random.choice(self.forced_items.shape[1], self.num_forced_items, replace = False)
+            items = np.concatenate([self.forced_items[:, idx], items], axis = 1)
 
         if self.is_verbose():
             self.log("System picked these items (cols) for each user (rows):\n" + str(items))
