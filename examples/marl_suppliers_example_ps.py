@@ -35,7 +35,6 @@ learning_rate = 0.0003
 gamma = 0.9999
 training_steps = 5000000
 log_interval = 10
-DEBUG = True
 
 savepath = "Results/MARLSuppliers"
 os.makedirs(savepath, exist_ok = True)
@@ -89,13 +88,13 @@ env.render(mode = "simulation")
 env.close()
 
 if num_suppliers == num_items and not price_into_observation and not attributes_into_observation:
-   all_possible_states = sum([[np.array([[i, j],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)] for j in range(steps_between_training * num_users + 1)], [])
-   policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten().reshape((steps_between_training * num_users + 1, steps_between_training * num_users + 1))
+   all_possible_states = np.stack(np.meshgrid(np.arange(0, (steps_between_training * num_users) + 1, steps_between_training), np.arange(0, (steps_between_training * num_users) + 1, steps_between_training), indexing = "ij"), axis = -1) / (steps_between_training * num_users)
+   policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten().reshape((num_users + 1, num_users + 1))
 
    if discrete_actions:
       policy = policy / 100
-   for i in range(steps_between_training * num_users + 1):
-      for j in range(steps_between_training * num_users + 1):
+   for i in range(num_users + 1):
+      for j in range(num_users + 1):
          if i > j:
             policy[i][j] = np.nan
 
@@ -108,59 +107,9 @@ if num_suppliers == num_items and not price_into_observation and not attributes_
    fig.savefig(os.path.join(savepath, "Policy_Heatmap.pdf"), bbox_inches = "tight")
    plt.clf()
 
-   all_possible_states = [np.array([[i, steps_between_training * num_users],]) / (steps_between_training * num_users) for i in range(steps_between_training * num_users + 1)]
-   policy = np.array([model.predict(obs, deterministic = True)[0] for obs in all_possible_states]).flatten()
-   if discrete_actions:
-      policy = policy / 100
-
-   plt.plot(np.arange(steps_between_training * num_users + 1) / (steps_between_training * num_users), policy, color = "C0")
-   plt.title("Policy representation for all possible states")
+   plt.plot(np.arange(num_users + 1) / num_users, policy[:, -1], color = "C0")
    plt.xlabel("State")
    plt.ylabel(r"Price ($\epsilon_i$)")
    plt.savefig(os.path.join(savepath, "Policy.pdf"), bbox_inches = "tight")
    plt.clf()
    plt.close("all")
-
-if DEBUG:
-   print("------------------- DEBUG ------------------")
-   debug_savepath = os.path.join(savepath, "DEBUG")
-   os.makedirs(debug_savepath, exist_ok = True)
-
-   env = ma_suppliers_parallel_env(
-      rec_type = rec_type,
-      num_suppliers = num_suppliers,
-      num_users = num_users,
-      num_items = num_items,
-      num_attributes = num_attributes,
-      attention_exp = attention_exp,
-      pretraining = pretraining,
-      simulation_steps = simulation_steps,
-      steps_between_training = steps_between_training,
-      max_preference_per_attribute = max_preference_per_attribute,
-      train_between_steps = train_between_steps,
-      num_items_per_iter = num_items_per_iter,
-      random_items_per_iter = random_items_per_iter,
-      repeated_items = repeated_items,
-      probabilistic_recommendations = probabilistic_recommendations,
-      vertically_differentiate = vertically_differentiate,
-      all_items_identical = all_items_identical,
-      attributes_into_observation = attributes_into_observation,
-      price_into_observation = price_into_observation,
-      rs_knows_prices = rs_knows_prices,
-      discrete_actions = discrete_actions,
-      savepath = debug_savepath
-   )
-   env = ss.pad_observations_v0(env)
-   env = ss.pad_action_space_v0(env)
-
-   policies = np.random.choice([0., 0.25, 0.5, 0.75, 1.], size = (num_suppliers))
-   repetitions = num_items if type(num_items) == list else [num_items // num_suppliers for _ in range(num_suppliers)]
-
-   _ = env.reset()
-   env_done = False
-   while not env_done:
-      actions = {agent: np.array([policies[a] for _ in range(repetitions[a])]) for a, agent in enumerate(env.agents)}
-      _, _, dones, _ = env.step(actions)
-      env_done = list(dones.values())[0]
-   env.render(mode = "simulation")
-   env.close()

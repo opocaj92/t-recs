@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import sys
 import os
 import pickle
+import math
 from typing import Union
 
 def blockTqdm():
@@ -102,7 +103,7 @@ class parallel_env(ParallelEnv):
     self.savepath = savepath
     os.makedirs(self.savepath, exist_ok = True)
 
-    self.possible_agents = ["Supplier " + str(r) for r in range(self.num_suppliers)]
+    self.possible_agents = ["Supplier " + str(r + 1) for r in range(self.num_suppliers)]
     self.agent_name_mapping = dict(zip(self.possible_agents, list(range(len(self.possible_agents)))))
     self.returns_history = []
     self.scaled_returns_history = []
@@ -277,7 +278,6 @@ class parallel_env(ParallelEnv):
           plt.plot(np.arange(returns_history.shape[0] - 1), returns_history[:-1, i], color = agents_colors[i], label = a)
         else:
           plt.plot(np.arange(returns_history.shape[0]), returns_history[:, i], color = agents_colors[i], label = a)
-      plt.title("RL return over training episodes")
       plt.xlabel("Episode")
       plt.ylabel("Return")
       plt.legend()
@@ -286,6 +286,31 @@ class parallel_env(ParallelEnv):
       with open(os.path.join(self.savepath, "History_Returns.pkl"), "wb") as f:
         pickle.dump(returns_history, f)
 
+      grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
+      plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
+      if len(self.possible_agents) % 2 == 0:
+        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
+      elif len(self.possible_agents) == 1:
+        plots = [plt.subplot(grid[0, 0:4])]
+      else:
+        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
+
+      for i, a in enumerate(self.possible_agents):
+        if self.n_steps == 0:
+          plots[i].plot(np.arange(returns_history.shape[0] - 1), returns_history[:-1, i], color = agents_colors[i], label = a)
+        else:
+          plots[i].plot(np.arange(returns_history.shape[0]), returns_history[:, i], color = agents_colors[i], label = a)
+        plots[i].legend()
+      if len(self.possible_agents) % 2 == 0:
+        plots[-1].set_xlabel("Episode")
+        plots[-2].set_xlabel("Episode")
+      else:
+        plots[-1].set_xlabel("Episode")
+      for i in range(int(math.ceil(len(self.possible_agents) / 2))):
+        plots[2 * i].set_ylabel("Return")
+      plt.savefig(os.path.join(self.savepath, "History_Returns_Individual.pdf"), bbox_inches = "tight")
+      plt.clf()
+
       if not self.all_items_identical:
         scaled_returns_history = np.array(self.scaled_returns_history)
         for i, a in enumerate(self.possible_agents):
@@ -293,7 +318,6 @@ class parallel_env(ParallelEnv):
             plt.plot(np.arange(scaled_returns_history.shape[0] - 1), scaled_returns_history[:-1, i], color = agents_colors[i], label = a)
           else:
             plt.plot(np.arange(scaled_returns_history.shape[0]), scaled_returns_history[:, i], color = agents_colors[i], label = a)
-        plt.title("RL scaledreturn over training episodes")
         plt.xlabel("Episode")
         plt.ylabel("Scaled Return")
         plt.legend()
@@ -301,6 +325,31 @@ class parallel_env(ParallelEnv):
         plt.clf()
         with open(os.path.join(self.savepath, "History_Scaled_Returns.pkl"), "wb") as f:
           pickle.dump(returns_history, f)
+
+        grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
+        plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
+        if len(self.possible_agents) % 2 == 0:
+          plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
+        elif len(self.possible_agents) == 1:
+          plots = [plt.subplot(grid[0, 0:4])]
+        else:
+          plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
+
+        for i, a in enumerate(self.possible_agents):
+          if self.n_steps == 0:
+            plots[i].plot(np.arange(scaled_returns_history.shape[0] - 1), scaled_returns_history[:-1, i], color = agents_colors[i], label = a)
+          else:
+            plots[i].plot(np.arange(scaled_returns_history.shape[0]), scaled_returns_history[:, i], color = agents_colors[i], label = a)
+          plots[i].legend()
+        if len(self.possible_agents) % 2 == 0:
+          plots[-1].set_xlabel("Episode")
+          plots[-2].set_xlabel("Episode")
+        else:
+          plots[-1].set_xlabel("Episode")
+        for i in range(int(math.ceil(len(self.possible_agents) / 2))):
+          plots[2 * i].set_ylabel("Scaled Return")
+        plt.savefig(os.path.join(self.savepath, "History_Scaled_Returns_Individual.pdf"), bbox_inches = "tight")
+        plt.clf()
 
       interactions_history = np.array(self.interactions_history)
       recommendations_history = np.array(self.recommendations_history)
@@ -320,7 +369,6 @@ class parallel_env(ParallelEnv):
           ax1.plot(np.arange(interactions_history.shape[0]), interactions_history[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           ax2.plot(np.arange(recommendations_history.shape[0]), recommendations_history[:, count], color = items_colors[count], linestyle = "dashed")
           count += 1
-      plt.title("Average RL observations over training episodes")
       ax1.set_xlabel("Episode")
       ax1.set_ylabel("Avg. Interactions %")
       ax2.set_ylabel("Avg. Recommendations %")
@@ -331,6 +379,56 @@ class parallel_env(ParallelEnv):
         pickle.dump(interactions_history, f)
       with open(os.path.join(self.savepath, "History_Recommendations.pkl"), "wb") as f:
         pickle.dump(recommendations_history, f)
+
+      grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
+      plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
+      if len(self.possible_agents) % 2 == 0:
+        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
+      elif len(self.possible_agents) == 1:
+        plots = [plt.subplot(grid[0, 0:4])]
+      else:
+        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
+
+      count = 0
+      for i, a in enumerate(self.possible_agents):
+        for j in range(self.num_items[i]):
+          plots[i].plot(np.arange(interactions_history.shape[0]), interactions_history[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+          count += 1
+        plots[i].legend()
+      if len(self.possible_agents) % 2 == 0:
+        plots[-1].set_xlabel("Episode")
+        plots[-2].set_xlabel("Episode")
+      else:
+        plots[-1].set_xlabel("Episode")
+      for i in range(int(math.ceil(len(self.possible_agents) / 2))):
+        plots[2 * i].set_ylabel("Avg. Interactions %")
+      plt.savefig(os.path.join(self.savepath, "History_Interactions_Individual.pdf"), bbox_inches = "tight")
+      plt.clf()
+
+      grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
+      plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
+      if len(self.possible_agents) % 2 == 0:
+        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
+      elif len(self.possible_agents) == 1:
+        plots = [plt.subplot(grid[0, 0:4])]
+      else:
+        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
+
+      count = 0
+      for i, a in enumerate(self.possible_agents):
+        for j in range(self.num_items[i]):
+          plots[i].plot(np.arange(recommendations_history.shape[0]), recommendations_history[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+          count += 1
+        plots[i].legend()
+      if len(self.possible_agents) % 2 == 0:
+        plots[-1].set_xlabel("Episode")
+        plots[-2].set_xlabel("Episode")
+      else:
+        plots[-1].set_xlabel("Episode")
+      for i in range(int(math.ceil(len(self.possible_agents) / 2))):
+        plots[2 * i].set_ylabel("Avg. Recommendations %")
+      plt.savefig(os.path.join(self.savepath, "History_Recommendations_Individual.pdf"), bbox_inches = "tight")
+      plt.clf()
 
       prices_history = np.array(self.prices_history)
       if self.n_steps != 0:
@@ -343,7 +441,6 @@ class parallel_env(ParallelEnv):
         for j in range(self.num_items[i]):
           plt.plot(np.arange(prices_history.shape[0]), prices_history[:, count], color = items_colors[count], label = a + (("Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
-      plt.title("Average RL price over training episodes")
       plt.xlabel("Episode")
       plt.ylabel("Avg. Price")
       plt.legend()
@@ -351,6 +448,31 @@ class parallel_env(ParallelEnv):
       plt.clf()
       with open(os.path.join(self.savepath, "History_Prices.pkl"), "wb") as f:
         pickle.dump(self.prices_history, f)
+
+      grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
+      plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
+      if len(self.possible_agents) % 2 == 0:
+        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
+      elif len(self.possible_agents) == 1:
+        plots = [plt.subplot(grid[0, 0:4])]
+      else:
+        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
+
+      count = 0
+      for i, a in enumerate(self.possible_agents):
+        for j in range(self.num_items[i]):
+          plots[i].plot(np.arange(prices_history.shape[0]), prices_history[:, count], color = items_colors[count], label = a + (("Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+          count += 1
+        plots[i].legend()
+      if len(self.possible_agents) % 2 == 0:
+        plots[-1].set_xlabel("Episode")
+        plots[-2].set_xlabel("Episode")
+      else:
+        plots[-1].set_xlabel("Episode")
+      for i in range(int(math.ceil(len(self.possible_agents) / 2))):
+        plots[2 * i].set_ylabel("Avg. Price")
+      plt.savefig(os.path.join(self.savepath, "History_Prices_Individual.pdf"), bbox_inches = "tight")
+      plt.clf()
 
     else:
       tot_steps = self.simulation_steps * self.steps_between_training
@@ -361,7 +483,6 @@ class parallel_env(ParallelEnv):
         for j in range(self.num_items[i]):
           plt.plot(np.arange(1, tot_steps + 1), ah[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
-      plt.title("Suppliers prices over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel(r"Price (cost + $\epsilon_i$)")
       plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
@@ -373,7 +494,6 @@ class parallel_env(ParallelEnv):
 
       interactions = self.measures["interaction_histogram"][-tot_steps:]
       modified_ih = np.cumsum(interactions, axis = 0)
-      modified_ih[0] = modified_ih[0] + 1e-32
       windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 > 0 else modified_ih[t] for t in range(modified_ih.shape[0])])
       percentages = windowed_modified_ih / np.sum(windowed_modified_ih, axis = 1, keepdims = True)
       count = 0
@@ -381,9 +501,8 @@ class parallel_env(ParallelEnv):
         for j in range(self.num_items[i]):
           plt.plot(np.arange(1, tot_steps + 1), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
-      plt.title("Suppliers interactions share over simulation steps")
       plt.xlabel("Timestep")
-      plt.ylabel(r"Interactions share %")
+      plt.ylabel("Interactions share %")
       plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
       plt.legend()
       plt.savefig(os.path.join(self.savepath, "Interactions.pdf"), bbox_inches = "tight")
@@ -393,7 +512,6 @@ class parallel_env(ParallelEnv):
 
       recommendations = self.measures["recommendation_histogram"][-tot_steps:]
       modified_rh = np.cumsum(recommendations, axis = 0)
-      modified_rh[0] = modified_rh[0] + 1e-32
       windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 > 0 else modified_rh[t] for t in range(modified_rh.shape[0])])
       percentages = windowed_modified_rh / (np.sum(windowed_modified_rh, axis = 1, keepdims = True) / self.num_items_per_iter)
       count = 0
@@ -401,9 +519,8 @@ class parallel_env(ParallelEnv):
         for j in range(self.num_items[i]):
           plt.plot(np.arange(1, tot_steps + 1), percentages[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
-      plt.title("Suppliers recommendations share over simulation steps")
       plt.xlabel("Timestep")
-      plt.ylabel(r"Recommendations share %")
+      plt.ylabel("Recommendations share %")
       plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
       plt.legend()
       plt.savefig(os.path.join(self.savepath, "Recommendations.pdf"), bbox_inches = "tight")
@@ -419,7 +536,6 @@ class parallel_env(ParallelEnv):
           for j in range(self.num_items[i]):
             plt.errorbar(self.costs[count], avg_prices[count], yerr = std_prices[count], fmt = "o", color = items_colors[count], alpha = 0.5, capsize = 5, elinewidth = 1, label = a + ((" Item " + str(j + 1)) if self.tot_items == self.num_suppliers else ""))
             count += 1
-        plt.title("Items quality-average price ratio")
         plt.xlabel("Initial cost (proportional to quality)")
         plt.ylabel(r"Average price")
         plt.legend()

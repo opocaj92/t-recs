@@ -246,7 +246,6 @@ class env(gym.Env):
         plt.plot(np.arange(len(self.returns_history) - 1), self.returns_history[:-1], color = colors[0], label = "Agent")
       else:
         plt.plot(np.arange(len(self.returns_history)), self.returns_history, color = colors[0], label = "Agent")
-      plt.title("RL return over training episodes")
       plt.xlabel("Episode")
       plt.ylabel("Return")
       plt.legend()
@@ -260,7 +259,6 @@ class env(gym.Env):
           plt.plot(np.arange(len(self.scaled_returns_history) - 1), self.scaled_returns_history[:-1], color = colors[0], label = "Agent")
         else:
           plt.plot(np.arange(len(self.scaled_returns_history)), self.scaled_returns_history, color = colors[0], label = "Agent")
-        plt.title("RL scaled return over training episodes")
         plt.xlabel("Episode")
         plt.ylabel("Scaled Return")
         plt.legend()
@@ -284,7 +282,6 @@ class env(gym.Env):
       for i in range(self.num_items[0]):
         ax1.plot(np.arange(interactions_history.shape[0]), interactions_history[:, i], color = colors[i], label = ("Item " + str(i +1)) if self.num_items[0] > 1 else "Agent")
         ax2.plot(np.arange(recommendations_history.shape[0]), recommendations_history[:, i], color = colors[i], linestyle = "dashed")
-      plt.title("Average RL observations over training episodes")
       plt.xlabel("Episode")
       ax1.set_ylabel("Avg. Interactions %")
       ax2.set_ylabel("Avg. Recommendations %")
@@ -310,8 +307,7 @@ class env(gym.Env):
         if i < self.num_items[0]:
           plt.plot(np.arange(prices_history.shape[0]), prices_history[:, i], color = colors[i], label = ("Item " + str(i + 1)) if self.num_items[0] > 1 else "Agent")
         else:
-          plt.plot(np.arange(others_history.shape[0]), others_history[:, i - self.num_items[0]], color = colors[i])
-      plt.title("Average RL price over training episodes")
+          plt.plot(np.arange(others_history.shape[0]), others_history[:, i - self.num_items[0]], color = colors[i], label = "Fixed")
       plt.xlabel("Episode")
       plt.ylabel("Avg. Price")
       plt.legend()
@@ -330,8 +326,7 @@ class env(gym.Env):
         if i < self.num_items[0]:
           plt.plot(np.arange(1, tot_steps + 1), ah[:, i], color = colors[i], label = ("Item " + str(i +1)) if self.num_items[0] > 1 else "Agent")
         else:
-          plt.hlines(self.other_policies[i - self.num_items[0]], xmin = 1, xmax = tot_steps,  color = colors[i])
-      plt.title("Suppliers prices over simulation steps")
+          plt.hlines(self.other_policies[i - self.num_items[0]], xmin = 1, xmax = tot_steps,  color = colors[i], label = "Fixed")
       plt.xlabel("Timestep")
       plt.ylabel(r"Price (cost + $\epsilon_i$)")
       plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
@@ -343,12 +338,10 @@ class env(gym.Env):
 
       interactions = self.measures["interaction_histogram"][-tot_steps:]
       modified_ih = np.cumsum(interactions, axis = 0)
-      modified_ih[0] = modified_ih[0] + 1e-32
       windowed_modified_ih = np.array([modified_ih[t] - modified_ih[t - 10] if t - 10 > 0 else modified_ih[t] for t in range(modified_ih.shape[0])])
       percentages = windowed_modified_ih / np.sum(windowed_modified_ih, axis = 1, keepdims = True)
       for i in range(self.num_items[0]):
         plt.plot(np.arange(1, tot_steps + 1), percentages[:, i], color = colors[i], label = ("Item " + str(i +1)) if self.num_items[0] > 1 else "Agent")
-      plt.title("Suppliers interactions share over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel("Interactions share %")
       plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
@@ -360,12 +353,10 @@ class env(gym.Env):
 
       recommendations = self.measures["recommendation_histogram"][-tot_steps:]
       modified_rh = np.cumsum(recommendations, axis = 0)
-      modified_rh[0] = modified_rh[0] + 1e-32
       windowed_modified_rh = np.array([modified_rh[t] - modified_rh[t - 10] if t - 10 > 0 else modified_rh[t] for t in range(modified_rh.shape[0])])
       percentages = windowed_modified_rh / (np.sum(windowed_modified_rh, axis = 1, keepdims = True) / self.num_items_per_iter)
       for i in range(self.num_items[0]):
         plt.plot(np.arange(1, tot_steps + 1), percentages[:, i], color = colors[i], label = ("Item " + str(i +1)) if self.num_items[0] > 1 else "Agent")
-      plt.title("Suppliers recommendations share over simulation steps")
       plt.xlabel("Timestep")
       plt.ylabel("Recommendations share %")
       plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
@@ -380,7 +371,6 @@ class env(gym.Env):
         std_prices = np.std(episode_actions, axis = 0)
         for i in range(self.num_items[0]):
           plt.errorbar(self.costs[i], avg_prices[i], yerr = std_prices[i], fmt = "o", color = colors[i], alpha = 0.5, capsize = 5, elinewidth = 1, linestyle = "", label = ("Item " + str(i +1)) if self.num_items[0] > 1 else "Agent")
-        plt.title("Items quality-average price ratio")
         plt.xlabel("Cost (proportional to quality)")
         plt.ylabel("Avg. Price")
         plt.legend()
