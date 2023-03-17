@@ -46,6 +46,7 @@ class parallel_env(ParallelEnv):
   def __init__(self,
                rec_type:str = "random_recommender",
                num_suppliers:int = 2,
+               num_fixed:int = 0,
                num_users:int = 100,
                num_items:Union[int, list] = 2,
                num_attributes:int = 100,
@@ -74,8 +75,11 @@ class parallel_env(ParallelEnv):
 
     self.rec_type = rec_type
     self.num_suppliers = num_suppliers
-    self.num_items = num_items if type(num_items) == list else [num_items // self.num_suppliers for _ in range(self.num_suppliers)]
+    self.num_fixed = num_fixed
+    self.tot_agents = self.num_suppliers + self.num_fixed
+    self.num_items = num_items if type(num_items) == list else [num_items // self.tot_agents for _ in range(self.tot_agents)]
     self.tot_items = np.sum(self.num_items)
+    self.tot_supp_items = np.sum(self.num_items[:self.num_suppliers])
     self.cum_items = np.insert(np.cumsum(self.num_items), 0, 0)
     self.num_users = num_users
     self.num_attributes = num_attributes
@@ -104,12 +108,15 @@ class parallel_env(ParallelEnv):
     os.makedirs(self.savepath, exist_ok = True)
 
     self.possible_agents = ["Supplier " + str(r + 1) for r in range(self.num_suppliers)]
-    self.agent_name_mapping = dict(zip(self.possible_agents, list(range(len(self.possible_agents)))))
+    self.agent_name_mapping = dict(zip(self.possible_agents, list(range(self.num_suppliers))))
     self.returns_history = []
     self.scaled_returns_history = []
     self.interactions_history = []
     self.recommendations_history = []
     self.prices_history = []
+    if self.num_fixed > 0:
+      self.fixed_policies = np.random.random(size = (self.tot_items - self.tot_supp_items))
+      self.fixed_history = []
 
   @functools.lru_cache(maxsize = None)
   def observation_space(self, agent):
@@ -130,9 +137,15 @@ class parallel_env(ParallelEnv):
     if self.discrete_actions:
       actions = {k: actions[k] / 100 for k in actions.keys()}
     epsilons = np.hstack(list(actions.values()))
+    if self.num_fixed > 0:
+      tot_epsilons = np.hstack([epsilons, self.fixed_policies])
+    else:
+      tot_epsilons = epsilons
     self.episode_actions.append(epsilons)
     self.prices_history[-1] = self.prices_history[-1] + epsilons
-    prices = self.costs + epsilons
+    if self.num_fixed > 0:
+      self.fixed_history[-1] = self.fixed_history[-1] + self.fixed_policies
+    prices = self.costs + tot_epsilons
 
     if self.users_know_prices:
       self.rec.set_items_price_for_users(prices)
@@ -159,14 +172,14 @@ class parallel_env(ParallelEnv):
       )
 
     self.measures = self.rec.get_measurements()
-    period_interactions = np.sum(self.measures["interaction_histogram"][-self.steps_between_training:], axis = 0)
+    period_interactions = np.sum(self.measures["interaction_histogram"][-self.steps_between_training:], axis = 0)[:self.tot_supp_items]
     individual_items_reward = [np.multiply(period_interactions[self.cum_items[i]:self.cum_items[i + 1]], epsilons[self.cum_items[i]:self.cum_items[i + 1]]) for i in range(self.num_suppliers)]
     tmp_rewards = [np.sum(individual_items_reward[i]) for i in range(self.num_suppliers)]
     self.scaled_returns_history[-1] = self.scaled_returns_history[-1] + [np.sum(np.divide(individual_items_reward[i], (self.scales[self.cum_items[i]:self.cum_items[i + 1]] + 1e-32))) for i in range(self.num_suppliers)]
 
     period_interactions = period_interactions / (self.num_users * self.steps_between_training)
     self.interactions_history[-1] = self.interactions_history[-1] + period_interactions
-    period_recommendations = np.sum(self.measures["recommendation_histogram"][-self.steps_between_training:], axis = 0)
+    period_recommendations = np.sum(self.measures["recommendation_histogram"][-self.steps_between_training:], axis = 0)[:self.tot_supp_items]
     period_recommendations = period_recommendations / (self.num_users * self.steps_between_training)
     self.recommendations_history[-1] = self.recommendations_history[-1] + period_recommendations
     tmp_observations = [np.concatenate([period_interactions[self.cum_items[i]:self.cum_items[i + 1]], period_recommendations[self.cum_items[i]:self.cum_items[i + 1]]]) for i in range(self.num_suppliers)]
@@ -190,11 +203,11 @@ class parallel_env(ParallelEnv):
     return observations, rewards, dones, infos
 
   def reset(self):
-    firm_scores = np.zeros((self.num_users, self.num_suppliers)) if self.tot_items == self.num_suppliers else np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_suppliers))
+    firm_scores = np.zeros((self.num_users, self.tot_agents)) if self.tot_items == self.tot_agents else np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.tot_agents))
     self.actual_user_representation = Users(
       actual_user_profiles = np.concatenate([np.random.randint(0, self.max_preference_per_attribute, size = (self.num_users, self.num_attributes)), firm_scores], axis = 1),
       num_users = self.num_users,
-      size = (self.num_users, self.num_attributes + self.num_suppliers),
+      size = (self.num_users, self.num_attributes + self.tot_agents),
       attention_exp = self.attention_exp,
       drift = self.drift,
       individual_rationality = self.individual_rationality
@@ -211,10 +224,10 @@ class parallel_env(ParallelEnv):
       else:
         shared_attr = np.random.permutation(base_vector)
         items_attributes = np.array([shared_attr for _ in range(self.tot_items)]).T
-    items_attributes = np.concatenate([items_attributes, np.repeat(np.eye(self.num_suppliers), self.num_items, axis = 1)], axis = 0)
+    items_attributes = np.concatenate([items_attributes, np.repeat(np.eye(self.tot_agents), self.num_items, axis = 1)], axis = 0)
     self.actual_item_representation = Items(
       item_attributes = items_attributes,
-      size = (self.num_attributes + self.num_suppliers, self.tot_items)
+      size = (self.num_attributes + self.tot_agents, self.tot_items)
     )
 
     if self.rec_type == "content_based" or self.rec_type == "ensemble_hybrid" or self.rec_type == "mixed_hybrid":
@@ -249,11 +262,14 @@ class parallel_env(ParallelEnv):
 
     self.measures = self.rec.get_measurements()
     self.episode_actions = []
-    self.returns_history.append(np.zeros(len(self.possible_agents[:])))
-    self.scaled_returns_history.append(np.zeros(len(self.possible_agents[:])))
-    self.interactions_history.append(np.zeros(self.tot_items))
-    self.recommendations_history.append(np.zeros(self.tot_items))
-    self.prices_history.append(np.zeros(self.tot_items))
+    self.returns_history.append(np.zeros(self.num_suppliers))
+    self.scaled_returns_history.append(np.zeros(self.num_suppliers))
+    self.interactions_history.append(np.zeros(self.tot_supp_items))
+    self.recommendations_history.append(np.zeros(self.tot_supp_items))
+    self.prices_history.append(np.zeros(self.tot_supp_items))
+    if self.num_fixed > 0:
+      # self.fixed_policies = np.random.random(size = (self.tot_items - self.tot_supp_items))
+      self.fixed_history.append(np.zeros(self.tot_items - self.tot_supp_items))
 
     self.agents = self.possible_agents[:]
     self.n_steps = 0
@@ -268,7 +284,7 @@ class parallel_env(ParallelEnv):
     return {agent: tmp_observations[i] for i, agent in enumerate(self.agents)}
 
   def render(self, mode = "simulation"):
-    agents_colors = plt.get_cmap("tab20c")(np.linspace(0, 1, len(self.possible_agents)))
+    agents_colors = plt.get_cmap("tab20c")(np.linspace(0, 1, self.tot_agents))
     items_colors = plt.get_cmap("tab20c")(np.linspace(0, 1, self.tot_items))
 
     if mode == "training":
@@ -286,30 +302,29 @@ class parallel_env(ParallelEnv):
       with open(os.path.join(self.savepath, "History_Returns.pkl"), "wb") as f:
         pickle.dump(returns_history, f)
 
-      grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
-      plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
-      if len(self.possible_agents) % 2 == 0:
-        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
-      elif len(self.possible_agents) == 1:
-        plots = [plt.subplot(grid[0, 0:4])]
-      else:
-        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
-
-      for i, a in enumerate(self.possible_agents):
-        if self.n_steps == 0:
-          plots[i].plot(np.arange(returns_history.shape[0] - 1), returns_history[:-1, i], color = agents_colors[i], label = a)
+      if self.num_suppliers > 1:
+        grid = plt.GridSpec(int(math.ceil(self.num_suppliers / 2)), 4, wspace = 0.8, hspace = 0.9)
+        plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(self.num_suppliers / 2)) - 1)], [])
+        if self.num_suppliers % 2 == 0:
+          plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 2:])]
         else:
-          plots[i].plot(np.arange(returns_history.shape[0]), returns_history[:, i], color = agents_colors[i], label = a)
-        plots[i].legend()
-      if len(self.possible_agents) % 2 == 0:
-        plots[-1].set_xlabel("Episode")
-        plots[-2].set_xlabel("Episode")
-      else:
-        plots[-1].set_xlabel("Episode")
-      for i in range(int(math.ceil(len(self.possible_agents) / 2))):
-        plots[2 * i].set_ylabel("Return")
-      plt.savefig(os.path.join(self.savepath, "History_Returns_Individual.pdf"), bbox_inches = "tight")
-      plt.clf()
+          plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 1:3])]
+
+        for i, a in enumerate(self.possible_agents):
+          if self.n_steps == 0:
+            plots[i].plot(np.arange(returns_history.shape[0] - 1), returns_history[:-1, i], color = agents_colors[i], label = a)
+          else:
+            plots[i].plot(np.arange(returns_history.shape[0]), returns_history[:, i], color = agents_colors[i], label = a)
+          plots[i].legend()
+        if self.num_suppliers % 2 == 0:
+          plots[-1].set_xlabel("Episode")
+          plots[-2].set_xlabel("Episode")
+        else:
+          plots[-1].set_xlabel("Episode")
+        for i in range(int(math.ceil(self.num_suppliers / 2))):
+          plots[2 * i].set_ylabel("Return")
+        plt.savefig(os.path.join(self.savepath, "History_Returns_Individual.pdf"), bbox_inches = "tight")
+        plt.clf()
 
       if not self.all_items_identical:
         scaled_returns_history = np.array(self.scaled_returns_history)
@@ -326,30 +341,29 @@ class parallel_env(ParallelEnv):
         with open(os.path.join(self.savepath, "History_Scaled_Returns.pkl"), "wb") as f:
           pickle.dump(returns_history, f)
 
-        grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
-        plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
-        if len(self.possible_agents) % 2 == 0:
-          plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
-        elif len(self.possible_agents) == 1:
-          plots = [plt.subplot(grid[0, 0:4])]
-        else:
-          plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
-
-        for i, a in enumerate(self.possible_agents):
-          if self.n_steps == 0:
-            plots[i].plot(np.arange(scaled_returns_history.shape[0] - 1), scaled_returns_history[:-1, i], color = agents_colors[i], label = a)
+        if self.num_suppliers > 1:
+          grid = plt.GridSpec(int(math.ceil(self.num_suppliers / 2)), 4, wspace = 0.8, hspace = 0.9)
+          plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(self.num_suppliers / 2)) - 1)], [])
+          if self.num_suppliers % 2 == 0:
+            plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 2:])]
           else:
-            plots[i].plot(np.arange(scaled_returns_history.shape[0]), scaled_returns_history[:, i], color = agents_colors[i], label = a)
-          plots[i].legend()
-        if len(self.possible_agents) % 2 == 0:
-          plots[-1].set_xlabel("Episode")
-          plots[-2].set_xlabel("Episode")
-        else:
-          plots[-1].set_xlabel("Episode")
-        for i in range(int(math.ceil(len(self.possible_agents) / 2))):
-          plots[2 * i].set_ylabel("Scaled Return")
-        plt.savefig(os.path.join(self.savepath, "History_Scaled_Returns_Individual.pdf"), bbox_inches = "tight")
-        plt.clf()
+            plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 1:3])]
+
+          for i, a in enumerate(self.possible_agents):
+            if self.n_steps == 0:
+              plots[i].plot(np.arange(scaled_returns_history.shape[0] - 1), scaled_returns_history[:-1, i], color = agents_colors[i], label = a)
+            else:
+              plots[i].plot(np.arange(scaled_returns_history.shape[0]), scaled_returns_history[:, i], color = agents_colors[i], label = a)
+            plots[i].legend()
+          if self.num_suppliers % 2 == 0:
+            plots[-1].set_xlabel("Episode")
+            plots[-2].set_xlabel("Episode")
+          else:
+            plots[-1].set_xlabel("Episode")
+          for i in range(int(math.ceil(self.num_suppliers / 2))):
+            plots[2 * i].set_ylabel("Scaled Return")
+          plt.savefig(os.path.join(self.savepath, "History_Scaled_Returns_Individual.pdf"), bbox_inches = "tight")
+          plt.clf()
 
       interactions_history = np.array(self.interactions_history)
       recommendations_history = np.array(self.recommendations_history)
@@ -380,67 +394,78 @@ class parallel_env(ParallelEnv):
       with open(os.path.join(self.savepath, "History_Recommendations.pkl"), "wb") as f:
         pickle.dump(recommendations_history, f)
 
-      grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
-      plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
-      if len(self.possible_agents) % 2 == 0:
-        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
-      elif len(self.possible_agents) == 1:
-        plots = [plt.subplot(grid[0, 0:4])]
-      else:
-        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
+      if self.num_suppliers > 1:
+        grid = plt.GridSpec(int(math.ceil(self.num_suppliers / 2)), 4, wspace = 0.8, hspace = 0.9)
+        plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(self.num_suppliers / 2)) - 1)], [])
+        if self.num_suppliers % 2 == 0:
+          plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 2:])]
+        else:
+          plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 1:3])]
 
-      count = 0
-      for i, a in enumerate(self.possible_agents):
-        for j in range(self.num_items[i]):
-          plots[i].plot(np.arange(interactions_history.shape[0]), interactions_history[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
-          count += 1
-        plots[i].legend()
-      if len(self.possible_agents) % 2 == 0:
-        plots[-1].set_xlabel("Episode")
-        plots[-2].set_xlabel("Episode")
-      else:
-        plots[-1].set_xlabel("Episode")
-      for i in range(int(math.ceil(len(self.possible_agents) / 2))):
-        plots[2 * i].set_ylabel("Avg. Interactions %")
-      plt.savefig(os.path.join(self.savepath, "History_Interactions_Individual.pdf"), bbox_inches = "tight")
-      plt.clf()
+        count = 0
+        for i, a in enumerate(self.possible_agents):
+          for j in range(self.num_items[i]):
+            plots[i].plot(np.arange(interactions_history.shape[0]), interactions_history[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+            count += 1
+          plots[i].legend()
+        if self.num_suppliers % 2 == 0:
+          plots[-1].set_xlabel("Episode")
+          plots[-2].set_xlabel("Episode")
+        else:
+          plots[-1].set_xlabel("Episode")
+        for i in range(int(math.ceil(self.num_suppliers / 2))):
+          plots[2 * i].set_ylabel("Avg. Interactions %")
+        plt.savefig(os.path.join(self.savepath, "History_Interactions_Individual.pdf"), bbox_inches = "tight")
+        plt.clf()
 
-      grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
-      plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
-      if len(self.possible_agents) % 2 == 0:
-        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
-      elif len(self.possible_agents) == 1:
-        plots = [plt.subplot(grid[0, 0:4])]
-      else:
-        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
+        grid = plt.GridSpec(int(math.ceil(self.num_suppliers / 2)), 4, wspace = 0.8, hspace = 0.9)
+        plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(self.num_suppliers / 2)) - 1)], [])
+        if self.num_suppliers % 2 == 0:
+          plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 2:])]
+        else:
+          plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 1:3])]
 
-      count = 0
-      for i, a in enumerate(self.possible_agents):
-        for j in range(self.num_items[i]):
-          plots[i].plot(np.arange(recommendations_history.shape[0]), recommendations_history[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
-          count += 1
-        plots[i].legend()
-      if len(self.possible_agents) % 2 == 0:
-        plots[-1].set_xlabel("Episode")
-        plots[-2].set_xlabel("Episode")
-      else:
-        plots[-1].set_xlabel("Episode")
-      for i in range(int(math.ceil(len(self.possible_agents) / 2))):
-        plots[2 * i].set_ylabel("Avg. Recommendations %")
-      plt.savefig(os.path.join(self.savepath, "History_Recommendations_Individual.pdf"), bbox_inches = "tight")
-      plt.clf()
+        count = 0
+        for i, a in enumerate(self.possible_agents):
+          for j in range(self.num_items[i]):
+            plots[i].plot(np.arange(recommendations_history.shape[0]), recommendations_history[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+            count += 1
+          plots[i].legend()
+        if self.num_suppliers % 2 == 0:
+          plots[-1].set_xlabel("Episode")
+          plots[-2].set_xlabel("Episode")
+        else:
+          plots[-1].set_xlabel("Episode")
+        for i in range(int(math.ceil(self.num_suppliers / 2))):
+          plots[2 * i].set_ylabel("Avg. Recommendations %")
+        plt.savefig(os.path.join(self.savepath, "History_Recommendations_Individual.pdf"), bbox_inches = "tight")
+        plt.clf()
 
       prices_history = np.array(self.prices_history)
+      if self.num_fixed > 0:
+        fixed_history = np.array(self.fixed_history)
       if self.n_steps != 0:
         prices_history[:-1] = prices_history[:-1] / self.simulation_steps
         prices_history[-1] /= self.n_steps
+        if self.num_fixed > 0:
+          fixed_history[:-1] = fixed_history[:-1] / self.simulation_steps
+          fixed_history[-1] /= self.n_steps
       else:
         prices_history = prices_history[:-1] / self.simulation_steps
+        if self.num_fixed > 0:
+          fixed_history[:-1] = fixed_history[:-1] / self.simulation_steps
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
           plt.plot(np.arange(prices_history.shape[0]), prices_history[:, count], color = items_colors[count], label = a + (("Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
+      if self.num_fixed > 0:
+        new_count = 0
+        for i in range(self.num_fixed):
+          for j in range(self.num_items[self.num_suppliers + i]):
+            plt.plot(np.arange(fixed_history.shape[0]), fixed_history[:, new_count], color = items_colors[count], label = "Fixed " + str(i + 1) + (("Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+            count += 1
+            new_count += 1
       plt.xlabel("Episode")
       plt.ylabel("Avg. Price")
       plt.legend()
@@ -448,41 +473,50 @@ class parallel_env(ParallelEnv):
       plt.clf()
       with open(os.path.join(self.savepath, "History_Prices.pkl"), "wb") as f:
         pickle.dump(self.prices_history, f)
+      if self.num_fixed > 0:
+        with open(os.path.join(self.savepath, "History_Fixed.pkl"), "wb") as f:
+          pickle.dump(self.fixed_history, f)
 
-      grid = plt.GridSpec(int(math.ceil(len(self.possible_agents) / 2)), 4, wspace = 0.8, hspace = 0.9)
-      plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(len(self.possible_agents) / 2)) - 1)], [])
-      if len(self.possible_agents) % 2 == 0:
-        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 2:])]
-      elif len(self.possible_agents) == 1:
-        plots = [plt.subplot(grid[0, 0:4])]
-      else:
-        plots = plots + [plt.subplot(grid[int(math.ceil(len(self.possible_agents) / 2)) - 1, 1:3])]
+      if self.num_suppliers > 1:
+        grid = plt.GridSpec(int(math.ceil(self.num_suppliers / 2)), 4, wspace = 0.8, hspace = 0.9)
+        plots = sum([[plt.subplot(grid[i, :2]), plt.subplot(grid[i, 2:])] for i in range(int(math.ceil(self.num_suppliers / 2)) - 1)], [])
+        if self.num_suppliers % 2 == 0:
+          plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, :2]), plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 2:])]
+        else:
+          plots = plots + [plt.subplot(grid[int(math.ceil(self.num_suppliers / 2)) - 1, 1:3])]
 
-      count = 0
-      for i, a in enumerate(self.possible_agents):
-        for j in range(self.num_items[i]):
-          plots[i].plot(np.arange(prices_history.shape[0]), prices_history[:, count], color = items_colors[count], label = a + (("Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
-          count += 1
-        plots[i].legend()
-      if len(self.possible_agents) % 2 == 0:
-        plots[-1].set_xlabel("Episode")
-        plots[-2].set_xlabel("Episode")
-      else:
-        plots[-1].set_xlabel("Episode")
-      for i in range(int(math.ceil(len(self.possible_agents) / 2))):
-        plots[2 * i].set_ylabel("Avg. Price")
-      plt.savefig(os.path.join(self.savepath, "History_Prices_Individual.pdf"), bbox_inches = "tight")
-      plt.clf()
+        count = 0
+        for i, a in enumerate(self.possible_agents):
+          for j in range(self.num_items[i]):
+            plots[i].plot(np.arange(prices_history.shape[0]), prices_history[:, count], color = items_colors[count], label = a + (("Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+            count += 1
+          plots[i].legend()
+        if self.num_suppliers % 2 == 0:
+          plots[-1].set_xlabel("Episode")
+          plots[-2].set_xlabel("Episode")
+        else:
+          plots[-1].set_xlabel("Episode")
+        for i in range(int(math.ceil(self.num_suppliers / 2))):
+          plots[2 * i].set_ylabel("Avg. Price")
+        plt.savefig(os.path.join(self.savepath, "History_Prices_Individual.pdf"), bbox_inches = "tight")
+        plt.clf()
 
     else:
       tot_steps = self.simulation_steps * self.steps_between_training
       episode_actions = np.array(self.episode_actions)
-      ah = np.repeat(self.costs + episode_actions, self.steps_between_training, axis = 0)
+      ah = np.repeat(self.costs[:self.tot_supp_items] + episode_actions, self.steps_between_training, axis = 0)
       count = 0
       for i, a in enumerate(self.possible_agents):
         for j in range(self.num_items[i]):
           plt.plot(np.arange(1, tot_steps + 1), ah[:, count], color = items_colors[count], label = a + ((" Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
           count += 1
+      if self.num_fixed > 0:
+        new_count = 0
+        for i in range(self.num_fixed):
+          for j in range(self.num_items[self.num_suppliers + i]):
+            plt.hlines(self.fixed_policies[new_count], xmin = 1, xmax = tot_steps, color = items_colors[count], label = "Fixed " + str(i + 1) + (("Item " + str(j + 1)) if self.num_items[i] > 1 else ""))
+            count += 1
+            new_count += 1
       plt.xlabel("Timestep")
       plt.ylabel(r"Price (cost + $\epsilon_i$)")
       plt.xticks([1] + list(range(0, tot_steps, 20))[1:])
