@@ -1,11 +1,24 @@
-T-RECS (Tool for RecSys Simulation)
-=====================================
+T-RECS (Tool for RecSys Simulation) Extended
+============================================
 
 .. image:: https://i.imgur.com/3ZRDVaD.png
   :width: 400
   :alt: Picture of T-Rex next to letters T-RECS
 
-A library for using agent-based modeling to perform simulation studies of sociotechnical systems.
+An **(extended)** library for using agent-based modeling to perform simulation studies of sociotechnical systems.
+
+The basic framework that we are extending upon is the amazing t-recs available at [https://github.com/elucherini/t-recs](https://github.com/elucherini/t-recs)
+
+*This extension has been developed to allow our work on the impact of recommender systems' biases on digital markets (still work in progress).*
+
+Extensions
+----------
+
+We extended the basic t-recs framework with a number of additions, including (but not limited to):
+
+- New recommender algorithms: ideal recommender, hybrid recommenders, priced recommenders
+- New metrics to analyse performances, like predicted-actual scores correlation or recommendation histogram
+- More flexibility in general behaviours, like individually rational users (that can decide to not interact with anything if their scores for the proposed items are negative) or the possibility to randomly recommend some of the newly created items from the creators to increase their visibility
 
 Installation
 ------------
@@ -28,23 +41,14 @@ To ensure the example Jupyter notebooks run in your Python 3.7 environment, foll
 
 .. _the instructions from this blog post: https://medium.com/@nrk25693/how-to-add-your-conda-environment-to-your-jupyter-notebook-in-just-4-steps-abeab8b8d084
 
-For users
-#########
-
-To install the simulator, you will need the Python package manager, ``pip``. After activating your virtual environment, run the following command in a terminal:
-
-..  code-block:: bash
-
-  pip install trecs
-
-For developers
+For users and developers
 ##############
 
-If you'd like to install the latest version of ``trecs`` based on what is currently in the main branch of the repository, run the following commands after activating your virtual environment:
+If you'd like to install the latest version of this ``trecs`` extension based on what is currently in the main branch of the repository, run the following commands after activating your virtual environment:
 
 ..  code-block:: bash
 
-  git clone https://github.com/elucherini/t-recs.git
+  git clone https://github.com/opocaj92/t-recs.git
   cd t-recs
   pip install -e .
 
