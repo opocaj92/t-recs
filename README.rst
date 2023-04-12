@@ -5,9 +5,9 @@ T-RECS (Tool for RecSys Simulation) Extended
   :width: 400
   :alt: Picture of T-Rex next to letters T-RECS
 
-An **(extended)** library for using agent-based modeling to perform simulation studies of sociotechnical systems.
+An **(extended)** library for using agent-based modeling to perform simulation studies of sociotechnical systems, developed on top of the amazing ``t-recs by elucherini``_.
 
-The basic framework that we are extending upon is the amazing t-recs available at [https://github.com/elucherini/t-recs](https://github.com/elucherini/t-recs)
+.. _trecs bu elucherini: https://github.com/elucherini/t-recs
 
 *This extension has been developed to allow our work on the impact of recommender systems' biases on digital markets (still work in progress).*
 
