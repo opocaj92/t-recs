@@ -5,20 +5,21 @@ T-RECS (Tool for RecSys Simulation) Extended
   :width: 400
   :alt: Picture of T-Rex next to letters T-RECS
 
-An **(extended)** library for using agent-based modeling to perform simulation studies of sociotechnical systems, developed on top of the amazing `original library by elucherini`_.
+An **extended** library for using agent-based modeling to perform simulation studies of sociotechnical systems.
 
-.. _original library by elucherini: https://github.com/elucherini/t-recs
+Please note that this extension has been developed to allow our work on the impact of recommender systems' biases on digital markets (still work in progress), and all the credits for the basic framework are to be given to `original trecs by elucherini`_, of which this repository is a fork and an extension.
 
-*This extension has been developed to allow our work on the impact of recommender systems' biases on digital markets (still work in progress).*
+.. _original trecs by elucherini: https://github.com/elucherini/t-recs
 
-Extensions
+New features
 ----------
 
 We extended the basic t-recs framework with a number of additions, including (but not limited to):
 
-- New recommender algorithms: ideal recommender, hybrid recommenders, priced recommenders
-- New metrics to analyse performances, like predicted-actual scores correlation or recommendation histogram
-- More flexibility in general behaviours, like individually rational users (that can decide to not interact with anything if their scores for the proposed items are negative) or the possibility to randomly recommend some of the newly created items from the creators to increase their visibility
+- New recommender algorithms: ideal recommender, hybrid recommenders, priced recommenders,
+- New metrics to analyse performances, like predicted-actual scores correlation or recommendation histogram,
+- More flexibility in the RS and components behaviour, like individually rational users (that can decide to not interact with anything if their scores for the proposed items are negative) or the possibility to randomly recommend some of the newly created items from the creators to increase their visibility,
+- A number of bug fixes and improvements.
 
 Installation
 ------------
@@ -26,7 +27,7 @@ Installation
 System requirements
 ###################
 
-Currently, the simulator has only been tested extensively on MacOS 10.15 and Ubuntu 20.04.
+Currently, the simulator has only been tested extensively on Ubuntu 20.04.
 This simulator supports Python 3.7+ and it has not been tested with older versions of Python 3. If you have not configured a Python environment locally, please follow Scipy's `instructions for installing a scientific Python distribution`_.
 
 .. _instructions for installing a scientific Python distribution: https://scipy.org/install.html
@@ -44,7 +45,7 @@ To ensure the example Jupyter notebooks run in your Python 3.7 environment, foll
 For users and developers
 ##############
 
-If you'd like to install the latest version of this ``trecs`` extension based on what is currently in the main branch of the repository, run the following commands after activating your virtual environment:
+If you'd like to install the latest version of this ``extended trecs`` based on what is currently in the main branch of the repository, run the following commands after activating your virtual environment:
 
 ..  code-block:: bash
 
@@ -105,3 +106,7 @@ Contributing
 Thanks for your interest in contributing! Check out the guidelines for contributors in `CONTRIBUTING.md`_.
 
 .. _CONTRIBUTING.md: https://github.com/elucherini/t-recs/blob/main/CONTRIBUTING.md
+
+
+
+**Please note that the documentation and tutorials has been developed by the authors of the original framework t-recs, and are linked to the original repository to give credit to the authors**
