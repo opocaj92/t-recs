@@ -186,6 +186,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         num_forced_items=0,
         forced_items=None,
         forced_period=0,
+        sort_rec_per_popularity=False,
         verbose=False,
         seed=None,
     ):
@@ -291,6 +292,9 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             raise ValueError("There must be at least num_forced_items indices of items to recommend")
         self.forced_items = np.tile(np.array(forced_items), (num_users, 1)) if forced_items is not None else None
         self.forced_period = forced_period
+
+        # When we want to sort recommendations by popularity, an InteractionMeasurement needs to be provided
+        self.sort_rec_per_popularity = sort_rec_per_popularity
 
         # initial metrics measurements (done at the end
         # when the rest of the initial state has been initialized)
@@ -477,6 +481,16 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
                 self.log(
                     f"Top-k items ordered by preference (high to low) for each user:\n{str(rec)}"
                 )
+            if self.sort_rec_per_popularity:
+                popularity = self.get_measurements()["interaction_histogram"][-1]
+                popularity = np.concatenate([popularity, np.zeros(self.num_items - popularity.size)])
+                print("POP: " + str(popularity))
+                if popularity is not None:
+                    print("OLD REC: " + str(rec))
+                    pop_filtered = popularity[sort_top_k].reshape((self.num_users, k))
+                    sort_pop_k = mo.top_k_indices(pop_filtered, k, self.random_state)
+                    rec = rec[row[:, :k], sort_pop_k]
+                    print("NEW REC: " + str(rec))
             return rec
 
     def choose_interleaved_items(self, k, item_indices):
