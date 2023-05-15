@@ -482,15 +482,13 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
                     f"Top-k items ordered by preference (high to low) for each user:\n{str(rec)}"
                 )
             if self.sort_rec_per_popularity:
-                popularity = self.get_measurements()["interaction_histogram"][-1]
-                popularity = np.concatenate([popularity, np.zeros(self.num_items - popularity.size)])
-                print("POP: " + str(popularity))
+                popularity = self.get_measurements()["interaction_histogram"]
+                popularity[0] = np.zeros(self.num_items)
+                popularity = np.concatenate([popularity[-1], np.zeros(self.num_items - popularity[-1].size)])
                 if popularity is not None:
-                    print("OLD REC: " + str(rec))
                     pop_filtered = popularity[sort_top_k].reshape((self.num_users, k))
                     sort_pop_k = mo.top_k_indices(pop_filtered, k, self.random_state)
                     rec = rec[row[:, :k], sort_pop_k]
-                    print("NEW REC: " + str(rec))
             return rec
 
     def choose_interleaved_items(self, k, item_indices):
