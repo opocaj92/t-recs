@@ -490,7 +490,6 @@ class Users(BaseComponent):  # pylint: disable=too-many-ancestors
             self.actual_user_scores.value = actual_scores
 
         self.actual_user_scores.store_state()
-        self.item_attributes = item_attributes
 
     def score_new_items(self, new_items):
         """
@@ -512,7 +511,6 @@ class Users(BaseComponent):  # pylint: disable=too-many-ancestors
         )
         self.actual_user_scores.append_item_scores(new_scores)
         self.actual_user_scores.store_state()
-        self.item_attributes = np.concatenate([self.item_attributes, new_items], axis = 1)
 
     def get_actual_user_scores(self, user=None):
         """
@@ -576,16 +574,6 @@ class Users(BaseComponent):  # pylint: disable=too-many-ancestors
             self.actual_user_scores.set_item_scores_to_value(self.user_interactions, tmp_scores)
         rec_item_scores = self.actual_user_scores.get_item_scores(items_shown)
         rec_item_scores = self.attention_transform(rec_item_scores)
-
-        print("=================================")
-        print("rec_item_scores")
-        print(np.sort(rec_item_scores, axis=1))
-        print("Max values:", rec_item_scores.max(axis=1))
-        print("N max values:", np.equal(rec_item_scores, rec_item_scores.max(axis=1)[:, None]).sum(axis=1))
-        for i in range(self.num_users):
-            print("user ", i + 1)
-            print(self.item_attributes[:, items_shown[i, np.equal(rec_item_scores, rec_item_scores.max(axis=1)[:, None])[i]]].T)
-        print("=================================")
 
         sorted_user_preferences = mo.argmax(rec_item_scores, axis=1)
         interactions = items_shown[self.user_vector, sorted_user_preferences]
