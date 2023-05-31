@@ -284,7 +284,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         self.newly_created_indices = np.tile(np.arange(num_items), (num_users, 1))
 
         # Repeat indices of benefitted items for each user
-        self.num_forced_items = forced_items.shape[0]
+        self.num_forced_items = forced_items.shape[0] if forced_items is not None else 0
         if self.num_forced_items > self.num_items_per_iter:
             raise ValueError("You cannot force more items than the number of recommendations")
         if (forced_items is not None and self.num_forced_items > forced_items.shape[0]) or (forced_items is None and self.num_forced_items != 0):
