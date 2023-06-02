@@ -575,12 +575,14 @@ class Users(BaseComponent):  # pylint: disable=too-many-ancestors
         rec_item_scores = self.actual_user_scores.get_item_scores(items_shown)
         rec_item_scores = self.attention_transform(rec_item_scores)
 
-        print("=================================")
-        print("rec_item_scores")
-        print(np.sort(rec_item_scores, axis=1))
-        print("Max values:", rec_item_scores.max(axis=1))
-        print("N max values:", np.equal(rec_item_scores, rec_item_scores.max(axis=1)[:, None]).sum(axis=1))
-        print("=================================")
+        # print("=================================")
+        # print("rec_item_scores")
+        # print(np.sort(rec_item_scores, axis=1))
+        # print("Max values:", rec_item_scores.max(axis=1))
+        # print("N max values:", np.equal(rec_item_scores, rec_item_scores.max(axis=1)[:, None]).sum(axis=1))
+        # print("items_shown:", items_shown)
+        # print("actual user profiles", self.actual_user_profiles.value)
+        # print("=================================")
 
         sorted_user_preferences = mo.argmax(rec_item_scores, axis=1)
         interactions = items_shown[self.user_vector, sorted_user_preferences]
