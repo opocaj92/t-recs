@@ -183,7 +183,6 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         system_state=None,
         score_fn=mo.inner_product,
         interleaving_fn=None,
-        num_forced_items=0,
         forced_items=None,
         forced_period=0,
         sort_rec_per_popularity=False,
@@ -285,7 +284,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
         self.newly_created_indices = np.tile(np.arange(num_items), (num_users, 1))
 
         # Repeat indices of benefitted items for each user
-        self.num_forced_items = num_forced_items
+        self.num_forced_items = forced_items.shape[0] if forced_items is not None else 0
         if self.num_forced_items > self.num_items_per_iter:
             raise ValueError("You cannot force more items than the number of recommendations")
         if (forced_items is not None and self.num_forced_items > forced_items.shape[0]) or (forced_items is None and self.num_forced_items != 0):
@@ -635,8 +634,7 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
 
         if not startup and self.forced_period > 0 and self.forced_items is not None:
             self.forced_period -= 1
-            idx = np.random.choice(self.forced_items.shape[1], self.num_forced_items, replace = False)
-            items = np.concatenate([self.forced_items[:, idx], items], axis = 1)
+            items = np.concatenate([self.forced_items, items], axis = 1)
 
         if self.is_verbose():
             self.log("System picked these items (cols) for each user (rows):\n" + str(items))
