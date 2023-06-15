@@ -827,6 +827,13 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
 
         self.add_new_item_indices(new_items.shape[1])
         # create new predicted scores if not in startup
+
+        print("=======================================================")
+        print('self.score_fn', self.score_fn)
+        print('new_items_hat', new_items_hat )
+        print('self.users_hat.value', self.users_hat.value)
+        print("=======================================================")
+
         new_item_pred_score = self.score_fn(self.users_hat.value, new_items_hat)
         self.predicted_scores.append_item_scores(new_item_pred_score)
         # have users update their own scores too

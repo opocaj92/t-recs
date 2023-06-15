@@ -291,6 +291,14 @@ class ImplicitMF(BaseRecommender):
         new_items = np.tile(avg_item, (num_new_items, 1)).T
         return new_items
 
+    def process_new_items_NO_IMPUTATION(self, new_items):
+        """
+        """
+        num_new_items = new_items.shape[1]
+        zero_item = np.zeros(self.num_latent_factors)
+        new_items = np.tile(zero_item, (num_new_items, 1)).T
+        return new_items
+
     def process_new_users(self, new_users, **kwargs):
         """
         The representation of any new users is randomy sampled from the
