@@ -147,6 +147,7 @@ class ImplicitMF(BaseRecommender):
         seed=None,
         num_items_per_iter=10,
         model_params=None,
+        impute_new_items=True,
         **kwargs
     ):
         # check inputs
@@ -188,6 +189,8 @@ class ImplicitMF(BaseRecommender):
         # are the same as the "true" item attributes
         if actual_item_representation is None:
             actual_item_representation = item_representation.copy()
+
+        self.impute_new_items = impute_new_items
 
         super().__init__(
             user_representation,
@@ -279,8 +282,11 @@ class ImplicitMF(BaseRecommender):
 
 
     def process_new_items(self, new_items):
-        # return self.process_new_items_ORIG(new_items)
-        return self.process_new_items_NO_IMPUTATION(new_items)
+
+        if self.impute_new_items:
+            return self.process_new_items_ORIG(new_items)
+        else:
+            return self.process_new_items_NO_IMPUTATION(new_items)
 
     def process_new_items_ORIG(self, new_items):
         """
@@ -288,6 +294,7 @@ class ImplicitMF(BaseRecommender):
         over the latent representations of the existing items. Note: this requires that
         a model has already been fit prior to new items being created.
         """
+        # print('IMPUTE')
         num_new_items = new_items.shape[1]
         if self.als_model:
             avg_item = self.als_model.item_features_.T.mean(axis=1)
