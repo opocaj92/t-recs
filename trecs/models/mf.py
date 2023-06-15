@@ -277,7 +277,12 @@ class ImplicitMF(BaseRecommender):
         """
         super().startup_and_train(timesteps, no_new_items=no_new_items)
 
+
     def process_new_items(self, new_items):
+        # return self.process_new_items_ORIG(new_items)
+        return self.process_new_items_NO_IMPUTATION(new_items)
+
+    def process_new_items_ORIG(self, new_items):
         """
         Currently, ImplicitMF processes new items by performing a simple mean imputation
         over the latent representations of the existing items. Note: this requires that
@@ -294,6 +299,7 @@ class ImplicitMF(BaseRecommender):
     def process_new_items_NO_IMPUTATION(self, new_items):
         """
         """
+        print('NO IMP')
         num_new_items = new_items.shape[1]
         zero_item = np.zeros(self.num_latent_factors)
         new_items = np.tile(zero_item, (num_new_items, 1)).T
