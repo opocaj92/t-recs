@@ -299,7 +299,7 @@ class ImplicitMF(BaseRecommender):
     def process_new_items_NO_IMPUTATION(self, new_items):
         """
         """
-        print('NO IMP')
+        # print('NO IMP')
         num_new_items = new_items.shape[1]
         zero_item = np.zeros(self.num_latent_factors)
         new_items = np.tile(zero_item, (num_new_items, 1)).T
