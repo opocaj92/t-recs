@@ -598,9 +598,10 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
                 if not repeated_items:
                     self.forced_items = self.forced_items[np.where(np.take_along_axis(self.indices, self.forced_items, 1) >= 0)]
                     self.forced_items = self.forced_items.reshape(self.num_users, -1)
+                    self.num_forced_items = self.forced_items.shape[1]
 
-                    if self.forced_items.shape[1] < self.num_forced_items:
-                        raise ValueError("Not enough items to forcefully show")
+                    if self.num_forced_items == 0 and self.forced_period > 0:
+                        raise ValueError("No item to forcefully show is left")
                 num_recommended -= self.num_forced_items
 
         # We are restricting to randomly recommend newly created items only if this is the case
@@ -611,17 +612,36 @@ class BaseRecommender(MeasurementModule, SystemStateModule, VerboseMode, ABC):
             item_indices = item_indices[np.where(item_indices >= 0)]
             item_indices = item_indices.reshape((self.num_users, -1))
 
-        recommended = self.generate_recommendations(k=num_recommended, item_indices=item_indices)
+        if num_new_items > 0 or (not startup and self.forced_period > 0 and self.forced_items is not None):
+            recommended = self.generate_recommendations(k=self.num_items_per_iter, item_indices=item_indices)
+        else:
+            recommended = self.generate_recommendations(k=num_recommended, item_indices=item_indices)
 
         if self.is_verbose():
             self.log(f"Choice among {item_indices.shape[0]} items")
             if item_indices.shape[1] < num_new_items:
                 self.log("Insufficient number of items left!")
 
-        interleaved_items = self.choose_interleaved_items(num_new_items, random_item_indices)
+        if num_new_items > 0:
+            if not startup and self.forced_period > 0 and self.forced_items is not None:
+                interleaved_items = self.choose_interleaved_items(num_new_items + self.num_forced_items, random_item_indices)
+            else:
+                interleaved_items = self.choose_interleaved_items(num_new_items, random_item_indices)
+
+        # Removing duplicates between forced and interleaved items
+        if num_new_items > 0 and (not startup and self.forced_period > 0 and self.forced_items is not None):
+            interleaved_items = np.array([i[np.sort(np.unique(i, axis=0, return_index=True)[1])[:num_new_items + self.num_forced_items]][self.num_forced_items:] for i in np.concatenate([self.forced_items, interleaved_items], axis = 1)])
+
+        # Now between the recommended items and the others
+        if num_new_items > 0 and (not startup and self.forced_period > 0 and self.forced_items is not None):
+            recommended = np.array([i[np.sort(np.unique(i, axis=0, return_index=True)[1])[:self.num_items_per_iter]][self.num_forced_items + num_new_items:] for i in np.concatenate([self.forced_items, interleaved_items, recommended], axis = 1)])
+        elif num_new_items == 0 and (not startup and self.forced_period > 0 and self.forced_items is not None):
+            recommended = np.array([i[np.sort(np.unique(i, axis=0, return_index=True)[1])[:self.num_items_per_iter]][self.num_forced_items:] for i in np.concatenate([self.forced_items, recommended], axis = 1)])
+        elif num_new_items > 0 and not (not startup and self.forced_period > 0 and self.forced_items is not None):
+            recommended = np.array([i[np.sort(np.unique(i, axis=0, return_index=True)[1])[:self.num_items_per_iter]][num_new_items:] for i in np.concatenate([interleaved_items, recommended], axis = 1)])
 
         if num_new_items > 0:
-            items = self.random_state.random((self.num_users, self.num_items_per_iter))
+            items = self.random_state.random((self.num_users, num_recommended + num_new_items))
             interleave_mask = np.zeros(items.shape).astype(bool)
             rand_col_idxs = items.argpartition(-num_new_items)[:, -num_new_items:]
             np.put_along_axis(interleave_mask, rand_col_idxs, True, axis=1)
