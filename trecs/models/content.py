@@ -5,7 +5,7 @@ and predicted item profile. The predictions of user and item profiles
 are generated iteratively as users interact with items.
 """
 import numpy as np
-from scipy.optimize import nnls
+from scipy.optimize import nnls, lsq_linear
 import scipy.sparse as sp
 import trecs.matrix_ops as mo
 from trecs.random import Generator
@@ -131,6 +131,7 @@ class ContentFiltering(BaseRecommender):
         probabilistic_recommendations=False,
         seed=None,
         num_items_per_iter=10,
+        regression_type='lsq_linear',
         **kwargs
     ):
         # pylint: disable=duplicate-code
@@ -163,6 +164,9 @@ class ContentFiltering(BaseRecommender):
 
         # initialize cumulative interactions as a sparse matrix
         self.all_interactions = None
+
+        assert regression_type in ['nnls', 'lsq_linear']
+        self.regression_type = regression_type
 
         # Initialize recommender system
         BaseRecommender.__init__(
@@ -209,7 +213,7 @@ class ContentFiltering(BaseRecommender):
 
     def train(self):
         """
-        Uses the NNLS solver to train the user representations, based on the user
+        Uses the lsq_linear or NNLS solver to train the user representations, based on the user
         interaction & item attribute data.
 
         Note: this function may run slowly because it requires a manual loop over every
@@ -223,8 +227,25 @@ class ContentFiltering(BaseRecommender):
                     self.predicted_item_attributes.T
                 )  # convert to dense so nnls can be used
                 user_interactions = self.all_interactions[i, :].toarray()[0, :]
-                # solve for Content Filtering representation using nnls solver
-                self.users_hat.value[i, :] = nnls(item_attr, user_interactions)[0]
+
+                if self.regression_type == 'nnls':
+
+                    ####################################################################
+                    # solve for Content Filtering representation using nnls solver
+                    ####################################################################
+                    self.users_hat.value[i, :] = nnls(item_attr, user_interactions)[0]
+
+                elif self.regression_type == 'lsq_linear':
+
+                    ####################################################################
+                    # solve for Content Filtering representation using lsq_linear solver
+                    ####################################################################
+                    self.users_hat.value[i, :] = lsq_linear(item_attr, user_interactions)['x']
+
+                else:
+                    print("regression_type: %s not supported" % self.regression_type)
+                
+                # print('self.users_hat.value[i, :]', self.users_hat.value[i, :])
 
         super().train()
 
