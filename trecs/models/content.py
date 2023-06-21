@@ -131,7 +131,7 @@ class ContentFiltering(BaseRecommender):
         probabilistic_recommendations=False,
         seed=None,
         num_items_per_iter=10,
-        regression_type='lsq_linear',
+        regression_type="lsq_linear",
         **kwargs
     ):
         # pylint: disable=duplicate-code
@@ -165,7 +165,7 @@ class ContentFiltering(BaseRecommender):
         # initialize cumulative interactions as a sparse matrix
         self.all_interactions = None
 
-        assert regression_type in ['nnls', 'lsq_linear']
+        assert regression_type in ["nnls", "lsq_linear"]
         self.regression_type = regression_type
 
         # Initialize recommender system
@@ -228,25 +228,15 @@ class ContentFiltering(BaseRecommender):
                 )  # convert to dense so nnls can be used
                 user_interactions = self.all_interactions[i, :].toarray()[0, :]
 
-                if self.regression_type == 'nnls':
-
-                    ####################################################################
-                    # solve for Content Filtering representation using nnls solver
-                    ####################################################################
+                if self.regression_type == "nnls":
                     self.users_hat.value[i, :] = nnls(item_attr, user_interactions)[0]
 
                 elif self.regression_type == 'lsq_linear':
-
-                    ####################################################################
-                    # solve for Content Filtering representation using lsq_linear solver
-                    ####################################################################
                     reg = lsq_linear(item_attr, user_interactions)
                     assert reg['status'] == 3, "NON-OPTIMAL SOLUTION IN lsq_linear"
                     self.users_hat.value[i, :] = reg['x']
                 else:
                     print("regression_type: %s not supported" % self.regression_type)
-                
-                # print('self.users_hat.value[i, :]', self.users_hat.value[i, :])
 
         super().train()
 
