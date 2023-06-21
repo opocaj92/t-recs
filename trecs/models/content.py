@@ -240,8 +240,9 @@ class ContentFiltering(BaseRecommender):
                     ####################################################################
                     # solve for Content Filtering representation using lsq_linear solver
                     ####################################################################
-                    self.users_hat.value[i, :] = lsq_linear(item_attr, user_interactions)['x']
-
+                    reg = lsq_linear(item_attr, user_interactions)
+                    assert reg['status'] == 3, "NON-OPTIMAL SOLUTION IN lsq_linear"
+                    self.users_hat.value[i, :] = reg['x']
                 else:
                     print("regression_type: %s not supported" % self.regression_type)
                 
