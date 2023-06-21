@@ -284,17 +284,16 @@ class ImplicitMF(BaseRecommender):
     def process_new_items(self, new_items):
 
         if self.impute_new_items:
-            return self.process_new_items_ORIG(new_items)
+            return self.process_new_items_avg(new_items)
         else:
-            return self.process_new_items_NO_IMPUTATION(new_items)
+            return self.process_new_items_zeros(new_items)
 
-    def process_new_items_ORIG(self, new_items):
+    def process_new_items_avg(self, new_items):
         """
         Currently, ImplicitMF processes new items by performing a simple mean imputation
         over the latent representations of the existing items. Note: this requires that
         a model has already been fit prior to new items being created.
         """
-        # print('IMPUTE')
         num_new_items = new_items.shape[1]
         if self.als_model:
             avg_item = self.als_model.item_features_.T.mean(axis=1)
@@ -303,10 +302,10 @@ class ImplicitMF(BaseRecommender):
         new_items = np.tile(avg_item, (num_new_items, 1)).T
         return new_items
 
-    def process_new_items_NO_IMPUTATION(self, new_items):
+    def process_new_items_zeros(self, new_items):
         """
+        With this, ImplicitMF processes new items by simply setting these to zeros.
         """
-        # print('NO IMP')
         num_new_items = new_items.shape[1]
         zero_item = np.zeros(self.num_latent_factors)
         new_items = np.tile(zero_item, (num_new_items, 1)).T
