@@ -1035,7 +1035,8 @@ class ScoreMetric(Measurement):
             self.observe(None)
             return
 
-        sim_vals = recommender.users.actual_user_scores.get_item_scores(np.expand_dims(interactions, 1)) / np.max(recommender.actual_user_item_scores, axis = 1)
+        min_score = np.min(recommender.actual_user_item_scores, axis = 1)
+        sim_vals = (recommender.users.actual_user_scores.get_item_scores(np.expand_dims(interactions, 1)).flatten() - min_score) / (np.max(recommender.actual_user_item_scores, axis = 1) - min_score)
         interactions_idx = np.argwhere(interactions != -1).flatten()
         sim_vals = sim_vals[interactions_idx] if interactions_idx.shape[0] != 0 else np.zeros_like(sim_vals)
         if self.user is None:
